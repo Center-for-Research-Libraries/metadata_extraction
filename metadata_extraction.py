@@ -8,7 +8,6 @@ import shlex
 import os
 import time
 import shutil
-import time
 import copy
 import pymarc
 import sqlite3
@@ -25,10 +24,18 @@ import threading
 sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Desktop\\Python files\\crl_machine\\app'))
 #from format_date import *
 from crl.fetch_from_api import marc_from_oclc, marc_from_issn, marc_from_lccn
+#import get_marc_records
+#sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Desktop\\Python files\\get_marc_records'))
+#import utilties.get_marc_records as get_marc_records
+#from . import get_marc_records
+#from utilties import get_marc_records
+sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Desktop\\Python files\\metadata_extraction\\utilties'))
 import get_marc_records
 from functools import partial
 import configparser
 from collections import OrderedDict
+import openpyxl
+import win32clipboard
 
 #Creates the folder if it does not already exist
 def check_or_create_dir(path):
@@ -1225,14 +1232,45 @@ author_dict['wpr'] = 'writer of preface'
 author_dict['wst'] = 'writer of supplementary textual content'
 
 collection_dict = {}
-collection_dict['monogragh'] = {'name' : 'Center for Research Libraries (CRL) eResources, Monographs', 'id' : 'customer.93175.5'}
-collection_dict['newspaper'] = {'name' : 'Center for Research Libraries (CRL) eResources, Newspapers', 'id' : 'customer.93175.10'}
-collection_dict['serial'] = {'name' : 'Center for Research Libraries (CRL) eResources, Serials', 'id' : 'customer.93175.8'}
+collection_dict['monograph'] = {'coverage_depth' : 'ebook', 'oclc_collection_name' : 'Center for Research Libraries (CRL) eResources, Monographs', 'oclc_collection_id' : 'customer.93175.5'}
+collection_dict['newspaper'] = {'coverage_depth' : 'fulltext', 'oclc_collection_name' : 'Center for Research Libraries (CRL) eResources, Newspapers', 'oclc_collection_id' : 'customer.93175.10'}
+collection_dict['serial'] = {'coverage_depth' : 'fulltext', 'oclc_collection_name' : 'Center for Research Libraries (CRL) eResources, Serials', 'oclc_collection_id' : 'customer.93175.8'}
 
-file_types_dict = {'csv' : '.csv', 'tsv' : '.tsv', 'excel' : '.xlsx'}
+file_types_dict = {'csv' : '.csv', 'tsv' : '.tsv', 'excel' : '.xlsx', 'unicode text' : '.txt'}
 
-file_types = [('csv file', '.csv'), ('tsv file', '.tsv'), ('excel file', '.xlsx')]
+file_types = [('csv file', '.csv'), ('tsv file', '.tsv'), ('excel file', '.xlsx'), ('unicode text', '.txt')]
 
+record_source_dict = {}
+record_source_dict['millennium'] = {'button' : 'Millennium', 'label' : 'Bib number:\t'}
+record_source_dict['worldcat'] = {'button' : 'Worldcat', 'label' : 'OCLC number:\t'}
+record_source_dict['folio'] = {'button' : 'FOLIO', 'label' : ''}
+record_source_dict['ddsnext'] = {'button' : 'DDSnext', 'label' : ''}
+record_source_dict['eastview'] = {'button' : 'EastView', 'label' : ''}
+record_source_dict['icon'] = {'button' : 'ICON', 'label' : ''}
+record_source_dict['recap'] = {'button' : 'ReCAP', 'label' : ''}
+record_source_dict['papr'] = {'button' : 'PAPR', 'label' : ''}
+
+class excel_writer:
+    def __init__(self, workbook, filename, name):
+        self.row = 1
+        self.column = 1
+        self.workbook = workbook
+        self.filename = filename
+        self.workbook_sheet = workbook.active
+        self.workbook_sheet.title = name
+    #Append to row.
+    def writerow(self, row_content):
+#        print(row_content)
+        for i in range(1, len(row_content) + 1):
+            if row_content[i - 1] is 'None' or row_content[i - 1] is None:
+                row_content[i - 1] = ''
+#            print(row_content[i - 1])
+            self.workbook_sheet.cell(row = self.row, column = i, value=row_content[i - 1])
+        self.row += 1
+    def save(self):
+        self.workbook.save(filename = self.filename)
+#        print(self.filename)
+#        self.workbook.close()
 
 class configuration:
     def __init__(self):
@@ -1329,24 +1367,24 @@ class export_dialog(tkinter.Toplevel):
         self.top_frame = tkinter.Frame(self)
         self.top_frame.grid(row=0, sticky="nwe")
         
-        self.descriptive_metadata_label = tkinter.Label(self.top_frame, text='Descriptive Metadata File:\t')
-        self.title_metadata_label = tkinter.Label(self.top_frame, text='Title Metadata File:\t')
-        self.kbart_metadata_label = tkinter.Label(self.top_frame, text='Kbart Metadata File:\t')
+        self.descriptive_metadata_label = tkinter.Label(self.top_frame, text='Descriptive Metadata File:\t', font=font.Font(size=self.parent.size))
+        self.title_metadata_label = tkinter.Label(self.top_frame, text='Title Metadata File:\t', font=font.Font(size=self.parent.size))
+        self.kbart_metadata_label = tkinter.Label(self.top_frame, text='Kbart Metadata File:\t', font=font.Font(size=self.parent.size))
         
-        self.descriptive_metadata_button = tkinter.Button(self.top_frame, text='Browse', command=self.open_descriptive_metadata_file)
-        self.title_metadata_button = tkinter.Button(self.top_frame, text='Browse', command=self.open_title_metadata_file)
-        self.kbart_metadata_button = tkinter.Button(self.top_frame, text='Browse', command=self.open_kbart_metadata_file)
+        self.descriptive_metadata_button = tkinter.Button(self.top_frame, text='Browse', font=font.Font(size=self.parent.size), command=self.open_descriptive_metadata_file)
+        self.title_metadata_button = tkinter.Button(self.top_frame, text='Browse', font=font.Font(size=self.parent.size), command=self.open_title_metadata_file)
+        self.kbart_metadata_button = tkinter.Button(self.top_frame, text='Browse', font=font.Font(size=self.parent.size), command=self.open_kbart_metadata_file)
         
-        self.save_button = tkinter.Button(self.top_frame, text='Export', command=self.export)
-        self.close_button = tkinter.Button(self.top_frame, text='Close', command=self.destroy)
+        self.save_button = tkinter.Button(self.top_frame, text='Export', font=font.Font(size=self.parent.size), command=self.export)
+        self.close_button = tkinter.Button(self.top_frame, text='Close', font=font.Font(size=self.parent.size), command=self.destroy)
         
-        self.entry_descriptive_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_descriptive_metadata_text)
-        self.entry_title_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_title_metadata_text)
-        self.entry_kbart_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_kbart_metadata_text)
+        self.entry_descriptive_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_descriptive_metadata_text, font=font.Font(size=self.parent.size))
+        self.entry_title_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_title_metadata_text, font=font.Font(size=self.parent.size))
+        self.entry_kbart_metadata = tkinter.Entry(self.top_frame, textvariable=self.entry_kbart_metadata_text, font=font.Font(size=self.parent.size))
         
-        self.descriptive_metadata_label.grid(row=0, column=0)
-        self.title_metadata_label.grid(row=1, column=0)
-        self.kbart_metadata_label.grid(row=2, column=0)
+        self.descriptive_metadata_label.grid(row=0, column=0, sticky='N'+'W')
+        self.title_metadata_label.grid(row=1, column=0, sticky='N'+'W')
+        self.kbart_metadata_label.grid(row=2, column=0, sticky='N'+'W')
         
         self.entry_descriptive_metadata.grid(row=0, column=1, columnspan=20, sticky='N'+'E'+'W')
         self.entry_title_metadata.grid(row=1, column=1, columnspan=20, sticky='N'+'E'+'W')
@@ -1368,52 +1406,115 @@ class export_dialog(tkinter.Toplevel):
         if self.entry_descriptive_metadata_text.get() != '':
 #            descriptive_metadata_file = open(os.path.join(output_folder, 'ddsnext_descriptive_metadata_' + get_date() + file_types_dict[self.parent.file_types]),'wt',encoding='utf8', newline='')
 #            print(self.config.get_file_location('file_locations', 'descriptive_metadata'))
-            descriptive_metadata_file = open(self.config.get_file_location('file_locations', 'descriptive_metadata'),'wt',encoding='utf8', newline='')
-#            if file_types_dict[self.parent.file_types] == '.tsv':
-            if self.config.config['file_locations.descriptive_metadata']['file_extention'] == '.tsv':
-                dds_descriptive_writer = csv.writer(descriptive_metadata_file, delimiter='\t', dialect='excel')
+#            descriptive_metadata_file = open(self.config.get_file_location('file_locations', 'descriptive_metadata'),'wt',encoding='utf8', newline='')
+            if self.config.config['file_locations.descriptive_metadata']['file_extention'] == '.xlsx':
+                descriptive_metadata_file = openpyxl.Workbook()
+                dds_descriptive_writer = excel_writer(descriptive_metadata_file, self.config.get_file_location('file_locations', 'descriptive_metadata'), 'descriptive_metadata')
+            elif self.config.config['file_locations.descriptive_metadata']['file_extention'] == '.txt':
+                descriptive_metadata_file = open(self.config.get_file_location('file_locations', 'descriptive_metadata'),'wt',encoding='utf-16-le', newline='')
+                dds_descriptive_writer = csv.writer(descriptive_metadata_file, delimiter='\t', dialect='excel-tab')
             else:
-                dds_descriptive_writer = csv.writer(descriptive_metadata_file, dialect='excel')
+#            if file_types_dict[self.parent.file_types] == '.tsv':
+                descriptive_metadata_file = open(self.config.get_file_location('file_locations', 'descriptive_metadata'),'wt',encoding='utf8', newline='')
+                if self.config.config['file_locations.descriptive_metadata']['file_extention'] == '.tsv':
+                    dds_descriptive_writer = csv.writer(descriptive_metadata_file, delimiter='\t', dialect='excel')
+                else:
+                    dds_descriptive_writer = csv.writer(descriptive_metadata_file, dialect='excel')
 #            dds_descriptive_writer.writerow(['title_uuid' , 'field' , 'value'])
 #            print(descriptive_items)
 #            print(self.parent.descriptive_metadata)
-            for key in self.parent.descriptive_metadata:
-                for descriptive_metadata_field in self.parent.descriptive_metadata[key]:
-#                    print(descriptive_metadata_field)
-                    dds_descriptive_writer.writerow([descriptive_metadata_field['title_uuid'], descriptive_metadata_field['field'], descriptive_metadata_field['value']])
+#            for key in self.parent.descriptive_metadata:
+#                for descriptive_metadata_field in self.parent.descriptive_metadata[key]:
+##                    print(self.parent.descriptive_metadata)
+##                    print(self.parent.descriptive_metadata[key])
+##                    print(descriptive_metadata_field)
+##                    print(self.parent.descriptive_metadata[key]['title_uuid'], self.parent.descriptive_metadata[key]['field'], self.parent.descriptive_metadata[key]['value'])
+##                    dds_descriptive_writer.writerow([descriptive_metadata_field['title_uuid'], descriptive_metadata_field['field'], descriptive_metadata_field['value']])
+##                    dds_descriptive_writer.writerow([self.parent.descriptive_metadata[key]['title_uuid'], self.parent.descriptive_metadata[key]['field'], self.parent.descriptive_metadata[key]['value']])
+#                    dds_descriptive_writer.writerow([self.parent.descriptive_metadata[key][descriptive_metadata_field]['title_uuid'], self.parent.descriptive_metadata[key][descriptive_metadata_field]['field'], self.parent.descriptive_metadata[key][descriptive_metadata_field]['value']])
+
+#            for key in self.parent.descriptive_metadata:
+#                dds_descriptive_writer.writerow([self.parent.descriptive_metadata[key]['title_uuid'], self.parent.descriptive_metadata[key]['field'], self.parent.descriptive_metadata[key]['value']])
+
+            for row in self.parent.template_spreadsheet['descriptive_metadata']:
+                dds_descriptive_writer.writerow([self.parent.template_spreadsheet['descriptive_metadata'][row]['title_uuid'].get(), self.parent.template_spreadsheet['descriptive_metadata'][row]['field'].get(), self.parent.template_spreadsheet['descriptive_metadata'][row]['value'].get()])
+
+            if self.config.config['file_locations.descriptive_metadata']['file_extention'] == '.xlsx':
+                dds_descriptive_writer.save()
+            descriptive_metadata_file.close()
         
         if self.entry_title_metadata_text.get() != '':
 #            title_metadata_file = open(os.path.join(output_folder, 'ddsnext_title_metadata_' + get_date() + file_types_dict[self.parent.file_types]),'wt',encoding='utf8', newline='')
 #            print(self.config.get_file_location('file_locations', 'title_metadata'))
-            title_metadata_file = open(self.config.get_file_location('file_locations', 'title_metadata'),'wt',encoding='utf8', newline='')
+            
+#            title_metadata_file = open(self.config.get_file_location('file_locations', 'title_metadata'),'wt',encoding='utf8', newline='')
+            
 #            if file_types_dict[self.parent.file_types] == '.tsv':
-            if self.config.config['file_locations.title_metadata']['file_extention'] == '.tsv':
-                dds_title_writer = csv.writer(title_metadata_file, delimiter='\t', dialect='excel')
+            if self.config.config['file_locations.title_metadata']['file_extention'] == '.xlsx':
+#                workbook = openpyxl.Workbook()
+#                title_metadata_sheet = workbook.active
+#                title_metadata_sheet.title  = 'title_metadata'
+                title_metadata_file = openpyxl.Workbook()
+                dds_title_writer = excel_writer(title_metadata_file, self.config.get_file_location('file_locations', 'title_metadata'), 'title_metadata')
+                
+#                dds_title_writer = csv.writer(title_metadata_file, delimiter='\t', dialect='excel')
+            elif self.config.config['file_locations.title_metadata']['file_extention'] == '.txt':
+                title_metadata_file = open(self.config.get_file_location('file_locations', 'title_metadata'),'wt',encoding='utf-16-le', newline='')
+                dds_title_writer = csv.writer(title_metadata_file, delimiter='\t', dialect='excel-tab')
             else:
-                dds_title_writer = csv.writer(title_metadata_file, dialect='excel')
+                title_metadata_file = open(self.config.get_file_location('file_locations', 'title_metadata'),'wt',encoding='utf8', newline='')
+                if self.config.config['file_locations.title_metadata']['file_extention'] == '.tsv':
+                    dds_title_writer = csv.writer(title_metadata_file, delimiter='\t', dialect='excel')
+                else:
+                    dds_title_writer = csv.writer(title_metadata_file, dialect='excel')
 #            dds_title_writer.writerow(['Title Name', 'Title UUID', 'Title Material Type', 'Title Format', 'Title OCLC', 'Title Digital Holding Range', 'Title Resolution', 'Title Color Depth', 'Title Location Code', 'Title Catalog Link', 'Title External Link'])
 #            print(self.parent.title_metadata)
-            for key in self.parent.title_metadata:
-#                print(key, self.parent.title_metadata[key])
-                dds_title_writer.writerow([self.parent.title_metadata[key]['title_name'], self.parent.title_metadata[key]['title_uuid'], self.parent.title_metadata[key]['title_material_type'], self.parent.title_metadata[key]['title_format'], self.parent.title_metadata[key]['title_oclc'], self.parent.title_metadata[key]['title_digital_holding_range'], self.parent.title_metadata[key]['title_resolution'], self.parent.title_metadata[key]['title_color_depth'], self.parent.title_metadata[key]['title_location_code'], self.parent.title_metadata[key]['title_catalog_link'], self.parent.title_metadata[key]['title_external_link']])
-            
+
+#            for key in self.parent.title_metadata:
+##                print(key, self.parent.title_metadata[key])
+#                dds_title_writer.writerow([self.parent.title_metadata[key]['title_name'], self.parent.title_metadata[key]['title_uuid'], self.parent.title_metadata[key]['title_material_type'], self.parent.title_metadata[key]['title_format'], self.parent.title_metadata[key]['title_oclc'], self.parent.title_metadata[key]['title_digital_holding_range'], self.parent.title_metadata[key]['title_resolution'], self.parent.title_metadata[key]['title_color_depth'], self.parent.title_metadata[key]['title_location_code'], self.parent.title_metadata[key]['title_catalog_link'], self.parent.title_metadata[key]['title_external_link']])
+
+            for row in self.parent.template_spreadsheet['title_metadata']:
+                dds_title_writer.writerow([self.parent.template_spreadsheet['title_metadata'][row]['title_name'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_uuid'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_material_type'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_format'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_oclc'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_digital_holding_range'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_resolution'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_color_depth'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_location_code'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_catalog_link'].get(), self.parent.template_spreadsheet['title_metadata'][row]['title_external_link'].get()])
+
+            if self.config.config['file_locations.title_metadata']['file_extention'] == '.xlsx':
+                dds_title_writer.save()
+            title_metadata_file.close()
+
         if self.entry_kbart_metadata_text.get() != '':
 #            kbart_metadata_file = open(os.path.join(output_folder, 'worldshare_metadata_' + get_date() + file_types_dict[self.parent.file_types]),'wt',encoding='utf8', newline='')
 #            print(self.config.get_file_location('file_locations', 'kbart_metadata'))
-            kbart_metadata_file = open(self.config.get_file_location('file_locations', 'kbart_metadata'),'wt',encoding='utf8', newline='')
+#            kbart_metadata_file = open(self.config.get_file_location('file_locations', 'kbart_metadata'),'wt',encoding='utf8', newline='')
 #            if file_types_dict[self.parent.file_types] == '.tsv':
-            if self.config.config['file_locations.title_metadata']['file_extention'] == '.tsv':
-                worldshare_writer = csv.writer(kbart_metadata_file, delimiter='\t', dialect='excel')
+            if self.config.config['file_locations.kbart_metadata']['file_extention'] == '.xlsx':
+                kbart_metadata_file = openpyxl.Workbook()
+                worldshare_writer = excel_writer(kbart_metadata_file, self.config.get_file_location('file_locations', 'kbart_metadata'), 'kbart_metadata')
+            elif self.config.config['file_locations.kbart_metadata']['file_extention'] == '.txt':
+                kbart_metadata_file = open(self.config.get_file_location('file_locations', 'kbart_metadata'),'wt',encoding='utf-16-le', newline='')
+                worldshare_writer = csv.writer(kbart_metadata_file, delimiter='\t', dialect='excel-tab')
             else:
-                worldshare_writer = csv.writer(kbart_metadata_file, dialect='excel')
+                kbart_metadata_file = open(self.config.get_file_location('file_locations', 'kbart_metadata'),'wt',encoding='utf8', newline='')
+                if self.config.config['file_locations.kbart_metadata']['file_extention'] == '.tsv':
+                    worldshare_writer = csv.writer(kbart_metadata_file, delimiter='\t', dialect='excel')
+                else:
+                    worldshare_writer = csv.writer(kbart_metadata_file, dialect='excel')
 #            worldshare_writer.writerow(['publication_title', 'print_identifier', 'online_identifier', 'date_first_issue_online', 'num_first_vol_online', 'num_first_issue_online', 'date_last_issue_online', 'num_last_vol_online', 'num_last_issue_online', 'title_url', 'first_author', 'title_id', 'embargo_info', 'coverage_depth', 'coverage_notes', 'publisher_name', 'location', 'title_notes', 'staff_notes', 'vendor_id', 'oclc_collection_name', 'oclc_collection_id', 'oclc_entry_id', 'oclc_linkscheme', 'oclc_number', 'ACTION'])
 #            print(self.parent.kbart_metadata)
-            for key in self.parent.kbart_metadata:
-#                print(key)
-                worldshare_writer.writerow([self.parent.kbart_metadata[key]['publication_title'], self.parent.kbart_metadata[key]['print_identifier'], self.parent.kbart_metadata[key]['online_identifier'], self.parent.kbart_metadata[key]['date_first_issue_online'], self.parent.kbart_metadata[key]['num_first_vol_online'], self.parent.kbart_metadata[key]['num_first_issue_online'], self.parent.kbart_metadata[key]['date_last_issue_online'], self.parent.kbart_metadata[key]['num_last_vol_online'], self.parent.kbart_metadata[key]['num_last_issue_online'], self.parent.kbart_metadata[key]['title_url'], self.parent.kbart_metadata[key]['first_author'], self.parent.kbart_metadata[key]['title_id'], self.parent.kbart_metadata[key]['embargo_info'], self.parent.kbart_metadata[key]['coverage_depth'], self.parent.kbart_metadata[key]['coverage_notes'], self.parent.kbart_metadata[key]['publisher_name'], self.parent.kbart_metadata[key]['location'], self.parent.kbart_metadata[key]['title_notes'], self.parent.kbart_metadata[key]['staff_notes'], self.parent.kbart_metadata[key]['vendor_id'], self.parent.kbart_metadata[key]['oclc_collection_name'], self.parent.kbart_metadata[key]['oclc_collection_id'], self.parent.kbart_metadata[key]['oclc_entry_id'], self.parent.kbart_metadata[key]['oclc_linkscheme'], self.parent.kbart_metadata[key]['oclc_number'], self.parent.kbart_metadata[key]['action']])
-        descriptive_metadata_file.close()
-        title_metadata_file.close()
-        kbart_metadata_file.close()
+
+#            for key in self.parent.kbart_metadata:
+##                print(key)
+#                worldshare_writer.writerow([self.parent.kbart_metadata[key]['publication_title'], self.parent.kbart_metadata[key]['print_identifier'], self.parent.kbart_metadata[key]['online_identifier'], self.parent.kbart_metadata[key]['date_first_issue_online'], self.parent.kbart_metadata[key]['num_first_vol_online'], self.parent.kbart_metadata[key]['num_first_issue_online'], self.parent.kbart_metadata[key]['date_last_issue_online'], self.parent.kbart_metadata[key]['num_last_vol_online'], self.parent.kbart_metadata[key]['num_last_issue_online'], self.parent.kbart_metadata[key]['title_url'], self.parent.kbart_metadata[key]['first_author'], self.parent.kbart_metadata[key]['title_id'], self.parent.kbart_metadata[key]['embargo_info'], self.parent.kbart_metadata[key]['coverage_depth'], self.parent.kbart_metadata[key]['coverage_notes'], self.parent.kbart_metadata[key]['publisher_name'], self.parent.kbart_metadata[key]['location'], self.parent.kbart_metadata[key]['title_notes'], self.parent.kbart_metadata[key]['staff_notes'], self.parent.kbart_metadata[key]['vendor_id'], self.parent.kbart_metadata[key]['oclc_collection_name'], self.parent.kbart_metadata[key]['oclc_collection_id'], self.parent.kbart_metadata[key]['oclc_entry_id'], self.parent.kbart_metadata[key]['oclc_linkscheme'], self.parent.kbart_metadata[key]['oclc_number'], self.parent.kbart_metadata[key]['action']])
+
+            for row in self.parent.template_spreadsheet['kbart_metadata']:
+                worldshare_writer.writerow([self.parent.template_spreadsheet['kbart_metadata'][row]['publication_title'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['print_identifier'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['online_identifier'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['date_first_issue_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['num_first_vol_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['num_first_issue_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['date_last_issue_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['num_last_vol_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['num_last_issue_online'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['title_url'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['first_author'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['title_id'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['embargo_info'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['coverage_depth'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['coverage_notes'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['publisher_name'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['location'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['title_notes'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['staff_notes'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['vendor_id'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['oclc_collection_name'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['oclc_collection_id'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['oclc_entry_id'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['oclc_linkscheme'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['oclc_number'].get(), self.parent.template_spreadsheet['kbart_metadata'][row]['action'].get()])
+
+            if self.config.config['file_locations.kbart_metadata']['file_extention'] == '.xlsx':
+                worldshare_writer.save()
+            kbart_metadata_file.close()
+
+#        descriptive_metadata_file.close()
+#        title_metadata_file.close()
+#        kbart_metadata_file.close()
         self.teminate()
     #Opens file dialog
     def open_file(self, initialdir, confirmoverwrite, defaultextension, filetypes, initialfile, title):
@@ -1442,13 +1543,27 @@ class export_dialog(tkinter.Toplevel):
         self.parent.focus_set()
         self.destroy()
 
+def convert_to_dict(input_list, header=False):
+    output_dict = {}
+#    print(input_list)
+    row = 0
+    for value in input_list:
+        if value == 'header':
+            output_dict['header'] = value
+            header=False
+        else:
+            output_dict[row] = value
+        row += 1
+    return output_dict
+
 class Application(tkinter.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.bib_num = ''
         self.uuid = ''
+        self.size = 11
         self.master.title('Metadata Extraction')
-        self.master.geometry('660x550')
+        self.master.geometry('1000x700')
         self.grid(row=0, sticky='N'+'S'+'E'+'W')
         self.master.grid_rowconfigure(0, weight = 1)
         self.master.grid_columnconfigure(0, weight = 1)
@@ -1456,8 +1571,8 @@ class Application(tkinter.Frame):
         self.entry_catalog_id_text = tkinter.StringVar()
         self.entry_uuid_text = tkinter.StringVar()
         self.entry_page_text = tkinter.StringVar()
-        self.numner_of_pages = tkinter.StringVar()
-        self.numner_of_pages.set(0)
+        self.number_of_pages = tkinter.StringVar()
+        self.number_of_pages.set(0)
         self.catalog_id_text = tkinter.StringVar()
         self.catalog_id_text.set('Bib number:\t')
         self.catalog_id_button_text = tkinter.StringVar()
@@ -1470,6 +1585,7 @@ class Application(tkinter.Frame):
         self.pages = {}
         self.spreadsheet = {}
         self.template_spreadsheet = {}
+        self.template_dict = {}
         self.windows_id_dict = {}
         self.windows = ttk.Notebook(self)
         self.screen_frame = tkinter.Frame(self.windows)
@@ -1514,12 +1630,19 @@ class Application(tkinter.Frame):
     def create_menu(self):
         self.menubar = tkinter.Menu(self.master)
         self.file_menu = tkinter.Menu(self.menubar, tearoff=0)
-        self.file_menu.add_command(label='Run', command=partial(self.run, self.import_type))
+        self.file_menu.add_command(label='Run', font=font.Font(size=self.size), command=self.run)
+#        self.file_menu.add_command(label='Run', font=font.Font(size=self.size), command=partial(self.run, self.import_type))
 #        self.file_menu.add_command(label='Export', state = 'disabled', command=self.export_to_file)
-        self.file_menu.add_command(label='Export', state = 'disabled', command=self.export)
+        self.file_menu.add_command(label='Export', font=font.Font(size=self.size), state = 'disabled', command=self.export)
 #        self.file_menu.add_command(label='Batch', command=self.change_to_batch)
-        self.file_menu.add_command(label='Quit', command=self.teminate)
-        self.menubar.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label='Quit', font=font.Font(size=self.size), command=self.teminate)
+        self.menubar.add_cascade(label='File', font=font.Font(size=self.size), menu=self.file_menu)
+        
+        self.setting_menu = tkinter.Menu(self.menubar, tearoff=0)
+        self.setting_menu.add_command(label='Font', font=font.Font(size=self.size), command=self.export)
+#        self.setting_menu.add_command(label='Export', font=font.Font(size=self.size), state = 'disabled', command=self.export)
+#        self.setting_menu.add_command(label='Quit', font=font.Font(size=self.size), command=self.teminate)
+        self.menubar.add_cascade(label='Setting', font=font.Font(size=self.size), menu=self.setting_menu)
         #Displays the menu
         self.master.config(menu=self.menubar)
     def create_widgets(self):
@@ -1542,7 +1665,7 @@ class Application(tkinter.Frame):
         self.scrollbar_visible = False
 #        self.screen_scrollbar_vertical.grid(row=0, column=2, rowspan=2, sticky='ns')
 #        self.screen_scrollbar_horizontal.grid(row=1, column=0, sticky='we')
-        self.screen_label = tkinter.Label(self.screen_frame_inner, background='black', textvariable=self.screen_text, fg='white', anchor='nw', justify=tkinter.LEFT)
+        self.screen_label = tkinter.Label(self.screen_frame_inner, background='black', textvariable=self.screen_text, font=font.Font(size=self.size), fg='white', anchor='nw', justify=tkinter.LEFT)
         self.screen_label.grid(row=0, column=0, columnspan=8, rowspan=6, sticky='nswe')
         self.screen_frame_inner.grid_rowconfigure(0, weight=1, minsize=461)
         self.screen_frame_inner.grid_columnconfigure(0, weight=1, minsize=620)
@@ -1557,7 +1680,7 @@ class Application(tkinter.Frame):
         
         #Binds the canvases to the configure event.
         self.screen_frame_outer.bind('<Configure>', self.set_up_canvas)
-        self.screen_frame_outer.bind('<<event1>>', self.set_up_records)
+        self.screen_frame_outer.bind('<<change_page>>', self.set_up_records)
         
 #        self.screen_canvas.grid(row=2, column=0, columnspan=8, rowspan=6, sticky='nswe', padx=6, pady=6)
 #        self.screen_canvas.grid(row=2, column=0, columnspan=8, sticky='nswe', padx=6)
@@ -1573,41 +1696,52 @@ class Application(tkinter.Frame):
 #        self.screen_canvas.grid_columnconfigure(0, weight=1)
 #        self.screen_canvas.grid_columnconfigure(6, weight=1)
         
-#        self.catalog_id_label = tkinter.Label(self.screen_frame, text='Bib number:\t')
-        self.screen_frame_top = tkinter.Frame(self.screen_frame)
-        self.catalog_id_label = tkinter.Label(self.screen_frame_top, textvariable=self.catalog_id_text)
-        self.uuid_label = tkinter.Label(self.screen_frame_top, text='DDSnext UUID:\t')
-        self.entry_bib_num = tkinter.Entry(self.screen_frame_top, textvariable=self.entry_catalog_id_text)
-        self.entry_uuid = tkinter.Entry(self.screen_frame_top, textvariable=self.entry_uuid_text)
-        self.run_button = tkinter.Button(self.screen_frame_top, text='Run', command=partial(self.run, 'single'))
-        #Sets up Button to switch between Millennium and Worldcat.
-        self.catalog_id_button = tkinter.Menubutton(self.screen_frame_top, textvariable=self.catalog_id_button_text, relief=tkinter.RAISED)
-        self.catalog_id_button.grid()
-        self.catalog_id_button.menu = tkinter.Menu(self.catalog_id_button, tearoff=0)
-        self.catalog_id_button['menu'] =  self.catalog_id_button.menu
-        self.catalog_id_button.menu.add_command(label='Millennium', command=self.change_to_millennium)
-        self.catalog_id_button.menu.add_command(label='Worldcat', command=self.change_to_worldcat)
-        self.catalog_id_label.grid(row=0, column=0)
-        self.uuid_label.grid(row=1, column=0)
-        self.entry_bib_num.grid(row=0, column=1, columnspan=6, sticky='nswe')
-        self.entry_uuid.grid(row=1, column=1, columnspan=6, sticky='nswe')
-        self.catalog_id_button.grid(row=0, column=7)
-        self.run_button.grid(row=1, column=7)
-        self.screen_frame_top.grid(row=0, column=0, sticky='nswe')
-        self.screen_frame_top.grid_columnconfigure(3, weight=1)
+##        self.catalog_id_label = tkinter.Label(self.screen_frame, text='Bib number:\t')
+#        self.screen_frame_top = tkinter.Frame(self.screen_frame)
+#        self.catalog_id_label = tkinter.Label(self.screen_frame_top, textvariable=self.catalog_id_text, font=font.Font(size=self.size))
+#        self.uuid_label = tkinter.Label(self.screen_frame_top, text='DDSnext UUID:\t', font=font.Font(size=self.size))
+#        self.entry_bib_num = tkinter.Entry(self.screen_frame_top, textvariable=self.entry_catalog_id_text, font=font.Font(size=self.size))
+#        self.entry_uuid = tkinter.Entry(self.screen_frame_top, textvariable=self.entry_uuid_text, font=font.Font(size=self.size))
+#        self.run_button = tkinter.Button(self.screen_frame_top, text='Run', font=font.Font(size=self.size), command=self.run)
+#        self.run_button = tkinter.Button(self.screen_frame_top, text='Run', font=font.Font(size=self.size), command=partial(self.run, 'single'))
+#        #Sets up Button to switch between Millennium and Worldcat.
+#        self.catalog_id_button = tkinter.Menubutton(self.screen_frame_top, textvariable=self.catalog_id_button_text, font=font.Font(size=self.size), relief=tkinter.RAISED)
+#        self.catalog_id_button.grid()
+#        self.catalog_id_button.menu = tkinter.Menu(self.catalog_id_button, tearoff=0)
+#        self.catalog_id_button['menu'] =  self.catalog_id_button.menu
+##        self.catalog_id_button.menu.add_command(label='Millennium', command=self.change_to_millennium)
+##        self.catalog_id_button.menu.add_command(label='Worldcat', command=self.change_to_worldcat)
+#        self.catalog_id_button.menu.add_command(label='Millennium', command=partial(self.change_record_source, 'millennium'))
+#        self.catalog_id_button.menu.add_command(label='Worldcat', command=partial(self.change_record_source, 'worldcat'))
+#        self.catalog_id_label.grid(row=0, column=0)
+#        self.uuid_label.grid(row=1, column=0)
+#        self.entry_bib_num.grid(row=0, column=1, columnspan=6, sticky='nswe')
+#        self.entry_uuid.grid(row=1, column=1, columnspan=6, sticky='nswe')
+#        self.catalog_id_button.grid(row=0, column=7)
+#        self.run_button.grid(row=1, column=7)
+#        self.screen_frame_top.grid(row=0, column=0, sticky='nswe')
+#        self.screen_frame_top.grid_columnconfigure(3, weight=1)
         
         self.page_frame = tkinter.Frame(self.screen_frame)
-        self.entry_page = tkinter.Entry(self.page_frame, textvariable=self.entry_page_text)
-        self.page_divider = tkinter.Label(self.page_frame, text=' / ')
-        self.page_label = tkinter.Label(self.page_frame, textvariable=self.numner_of_pages)
+        self.first_page_button = tkinter.Button(self.page_frame, text='<<', font=font.Font(size=8, weight='bold'), command=partial(self.change_record_page_navigation, first=True))
+        self.previous_page_button = tkinter.Button(self.page_frame, text='<', font=font.Font(size=8, weight='bold'), command=partial(self.change_record_page_navigation, change=-1))
+        self.entry_page = tkinter.Entry(self.page_frame, textvariable=self.entry_page_text, font=font.Font(size=self.size))
+        self.page_divider = tkinter.Label(self.page_frame, text=' / ', font=font.Font(size=self.size))
+        self.page_label = tkinter.Label(self.page_frame, textvariable=self.number_of_pages, font=font.Font(size=self.size))
+        self.next_page_button = tkinter.Button(self.page_frame, text='>', font=font.Font(size=8, weight='bold'), command=partial(self.change_record_page_navigation, change=1))
+        self.last_page_button = tkinter.Button(self.page_frame, text='>>', font=font.Font(size=8, weight='bold'), command=partial(self.change_record_page_navigation, last=True))
 #        self.screen_label.grid(row=2, column=0, columnspan=8, rowspan=6, sticky='nswe', padx=6, pady=6)
 #        self.page_frame.grid(row=8, column=4)
 #        self.page_frame.grid(row=8, column=4)
         self.page_frame.grid(row=2, column=0)
         
+        self.first_page_button.grid(row=0, column=1)
+        self.previous_page_button.grid(row=0, column=2)
         self.entry_page.grid(row=0, column=3)
         self.page_divider.grid(row=0, column=4)
         self.page_label.grid(row=0, column=5)
+        self.next_page_button.grid(row=0, column=6)
+        self.last_page_button.grid(row=0, column=7)
 #        self.grid_rowconfigure(2, weight=1)
 #        self.grid_columnconfigure(3, weight=1)
 #        self.grid_columnconfigure(6, weight=1)
@@ -1616,6 +1750,7 @@ class Application(tkinter.Frame):
         self.grid_columnconfigure(6, weight=1)
         
         self.entry_page.bind('<Return>', self.change_record_page_event_handler)
+#        self.entry_page.bind('<<change_page>>', self.change_record_page_event_handler)
 #        self.event_generate('<Configure>', when='tail')
     def create_spreadsheet(self):
 #        self.spreadsheet_frame = tkinter.Frame(self)
@@ -1623,7 +1758,7 @@ class Application(tkinter.Frame):
         self.spreadsheet_frame.grid_rowconfigure(0, weight=1)
         
         self.spreadsheet_frame.grid_columnconfigure(0, weight=1)
-                
+#                
         self.spreadsheet_frame_main.bind('<Configure>', self.set_up_canvas)
         
         #Sets up the screen canvas to enable scrolling.
@@ -1633,8 +1768,8 @@ class Application(tkinter.Frame):
         #Sets up the vertical and horizontal scrollbars.
         self.spreadsheet_scrollbar_vertical=tkinter.Scrollbar(self.spreadsheet_frame_main, orient='vertical', command=self.spreadsheet_screen_canvas.yview)
         self.spreadsheet_scrollbar_horizontal=tkinter.Scrollbar(self.spreadsheet_frame_main, orient='horizontal', command=self.spreadsheet_screen_canvas.xview)
-        self.spreadsheet_scrollbar_vertical.grid(row=0, column=2, sticky='ns')
-        self.spreadsheet_scrollbar_horizontal.grid(row=1, column=0, sticky='we')
+        self.spreadsheet_scrollbar_vertical.grid(row=0, column=8, sticky='ns')
+        self.spreadsheet_scrollbar_horizontal.grid(row=1, column=0, columnspan=8, sticky='we')
 #        self.spreadsheet_frame_inner.grid_rowconfigure(0, weight=1, minsize=461)
 #        self.spreadsheet_frame_inner.grid_columnconfigure(0, weight=1, minsize=620)
         #Adds space to the frame to prevent the vertical scrollbar from cutting off text.
@@ -1649,7 +1784,7 @@ class Application(tkinter.Frame):
         
         #Binds the canvases to the configure event.
 #        self.spreadsheet_frame.bind('<Configure>', self.set_up_spreadsheet_canvas)
-#        self.spreadsheet_frame.bind('<<event1>>', self.set_up_canvas)
+#        self.spreadsheet_frame.bind('<<change_page>>', self.set_up_canvas)
         
 #        self.spreadsheet_frame.grid(row=2, column=0, columnspan=8, sticky='nswe', padx=6)
         
@@ -1658,27 +1793,32 @@ class Application(tkinter.Frame):
         self.spreadsheet_frame_main.grid_rowconfigure(0, weight=1)
         self.spreadsheet_frame_main.grid_columnconfigure(0, weight=1)
         
-        self.spreadsheet_screen_canvas.grid(row=0, column=0, sticky='nswe')
+        self.spreadsheet_screen_canvas.grid(row=0, column=0, columnspan=8, sticky='nswe')
         
-        self.spreadsheet_catalog_id_label = tkinter.Label(self.spreadsheet_frame_inner, textvariable=self.catalog_id_text)
-        self.spreadsheet_uuid_label = tkinter.Label(self.spreadsheet_frame_inner, text='DDSnext UUID:\t')
+        self.spreadsheet_catalog_id_label = tkinter.Label(self.spreadsheet_frame_inner, textvariable=self.catalog_id_text, font=font.Font(size=self.size))
+        self.spreadsheet_uuid_label = tkinter.Label(self.spreadsheet_frame_inner, text='DDSnext UUID:\t', font=font.Font(size=self.size))
+#        self.spreadsheet_collection_label = tkinter.Label(self.spreadsheet_frame_inner, text='Collection:\t', font=font.Font(size=self.size))
+        #Sets up button to add collection info to spreadsheet.
+        self.spreadsheet_collection_button = tkinter.Menubutton(self.spreadsheet_frame_inner, text='Collection:\t', font=font.Font(size=self.size), relief=tkinter.RAISED, anchor='w')
+        self.spreadsheet_collection_button.grid()
+        self.spreadsheet_collection_button.menu = tkinter.Menu(self.spreadsheet_collection_button, tearoff=0)
+        self.spreadsheet_collection_button['menu'] =  self.spreadsheet_collection_button.menu
+        self.spreadsheet_collection_button.menu.add_command(label='Monograph', font=font.Font(size=self.size), command=partial(self.change_collection, 'monograph'))
+        self.spreadsheet_collection_button.menu.add_command(label='Newspaper', font=font.Font(size=self.size), command=partial(self.change_collection, 'newspaper'))
+        self.spreadsheet_collection_button.menu.add_command(label='Serial', font=font.Font(size=self.size), command=partial(self.change_collection, 'serial'))
+
+
+
         self.spreadsheet_catalog_id_label.grid(row=0, column=0, sticky='w')
         self.spreadsheet_uuid_label.grid(row=0, column=4, sticky='w')
-        self.spreadsheet_frame_inner.grid_columnconfigure(0, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(1, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(2, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(3, weight=1)
+#        self.spreadsheet_collection_label.grid(row=0, column=8, sticky='w')
+        self.spreadsheet_collection_button.grid(row=0, column=8, sticky='nswe')
         
-        self.spreadsheet_frame_inner.grid_columnconfigure(4, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(5, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(6, weight=1)
-        self.spreadsheet_frame_inner.grid_columnconfigure(7, weight=1)
-        
-#        self.spreadsheet_frame_inner.grid_columnconfigure(8, minsize=15)
         
         self.spreadsheet_bottom_frame = tkinter.Frame(self.spreadsheet_frame)
-        self.spreadsheet_run_button = tkinter.Button(self.spreadsheet_bottom_frame, text='Run', command=partial(self.run, 'batch'))
-        self.spreadsheet_clear_button = tkinter.Button(self.spreadsheet_bottom_frame, text='Clear', state = 'disabled', command=self.clear)
+        self.spreadsheet_run_button = tkinter.Button(self.spreadsheet_bottom_frame, text='Run', font=font.Font(size=self.size), command=self.run)
+#        self.spreadsheet_run_button = tkinter.Button(self.spreadsheet_bottom_frame, text='Run', font=font.Font(size=self.size), command=partial(self.run, 'batch'))
+        self.spreadsheet_clear_button = tkinter.Button(self.spreadsheet_bottom_frame, text='Clear', font=font.Font(size=self.size), state = 'disabled', command=self.clear)
         
         self.spreadsheet_clear_options_button = tkinter.Menubutton(self.spreadsheet_bottom_frame, text='^', font=font.Font(size=5, weight='bold'), relief=tkinter.RAISED)
         self.spreadsheet_clear_options_button.menu = tkinter.Menu(self.spreadsheet_clear_options_button, tearoff=0)
@@ -1686,54 +1826,106 @@ class Application(tkinter.Frame):
         self.clear_value = tkinter.StringVar()
         self.clear_value.set('all')
         self.spreadsheet_clear_options_button['menu'] =  self.spreadsheet_clear_options_button.menu
-        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries and Records', variable=self.clear_value, value='all', command = self.get_clear_state)
-        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries', variable=self.clear_value, value='entries', command = self.get_clear_state)
-        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Records', variable=self.clear_value, value='records', command = self.get_clear_state)
+        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries and Records', variable=self.clear_value, value='all', font=font.Font(size=self.size), command = self.get_clear_state)
+        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries', variable=self.clear_value, value='entries', font=font.Font(size=self.size), command = self.get_clear_state)
+        self.spreadsheet_clear_options_button.menu.add_radiobutton(label='Records', variable=self.clear_value, value='records', font=font.Font(size=self.size), command = self.get_clear_state)
         
         #Sets up Button to switch between Millennium and Worldcat.
-        self.spreadsheet_catalog_id_button = tkinter.Menubutton(self.spreadsheet_bottom_frame, textvariable=self.catalog_id_button_text, relief=tkinter.RAISED)
+        self.spreadsheet_catalog_id_button = tkinter.Menubutton(self.spreadsheet_bottom_frame, textvariable=self.catalog_id_button_text, font=font.Font(size=self.size), relief=tkinter.RAISED)
         self.spreadsheet_catalog_id_button.grid()
         self.spreadsheet_catalog_id_button.menu = tkinter.Menu(self.spreadsheet_catalog_id_button, tearoff=0)
         self.spreadsheet_catalog_id_button['menu'] =  self.spreadsheet_catalog_id_button.menu
-        self.spreadsheet_catalog_id_button.menu.add_command(label='Millennium', command=self.change_to_millennium)
-        self.spreadsheet_catalog_id_button.menu.add_command(label='Worldcat', command=self.change_to_worldcat)
+#        self.spreadsheet_catalog_id_button.menu.add_command(label='Millennium', font=font.Font(size=self.size), command=self.change_to_millennium)
+#        self.spreadsheet_catalog_id_button.menu.add_command(label='Worldcat', font=font.Font(size=self.size), command=self.change_to_worldcat)
+        self.spreadsheet_catalog_id_button.menu.add_command(label='Millennium', font=font.Font(size=self.size), command=partial(self.change_record_source, 'millennium'))
+        self.spreadsheet_catalog_id_button.menu.add_command(label='Worldcat', font=font.Font(size=self.size), command=partial(self.change_record_source, 'worldcat'))
+        
+##        self.spreadsheet_catalog_id_button_label = tkinter.Label(self.spreadsheet_bottom_frame, text='Record source', font=font.Font(size=self.size), bg='yellow')
+#        self.spreadsheet_catalog_id_button_label = tkinter.Label(self.spreadsheet_frame_main, text='Record source', font=font.Font(size=self.size), bg='yellow')
+#        self.spreadsheet_catalog_id_button.bind('<Enter>', partial(self.manage_catalog_id_popup, label=self.spreadsheet_catalog_id_button_label, type='enter'))
+#        self.spreadsheet_catalog_id_button.bind('<Leave>', partial(self.manage_catalog_id_popup, label=self.spreadsheet_catalog_id_button_label, type='leave'))
         
         self.spreadsheet_frame_main.grid(row=0, column=0, sticky='nswe')
         self.spreadsheet_bottom_frame.grid(row=1, column=0)
+#        self.spreadsheet_bottom_frame.rowconfigure(0, minsize=26)
 #        , sticky='nswe'
-        self.spreadsheet_run_button.grid(row=0, column=1)
-        self.spreadsheet_clear_button.grid(row=0, column=2)
-        self.spreadsheet_clear_options_button.grid(row=0, column=3, sticky='nw')
-        self.spreadsheet_catalog_id_button.grid(row=0, column=0, sticky='ns')
+        self.spreadsheet_run_button.grid(row=1, column=1)
+        self.spreadsheet_clear_button.grid(row=1, column=2)
+        self.spreadsheet_clear_options_button.grid(row=1, column=3, sticky='nw')
+        self.spreadsheet_catalog_id_button.grid(row=1, column=0, sticky='nswe')
+        
+##        self.spreadsheet_catalog_id_button_label.grid(row=0, column=0, columnspan=2, sticky='nsw')
+#        self.spreadsheet_catalog_id_button_label.grid(row=1, column=1, columnspan=2, sticky='nsw')
+#        self.spreadsheet_catalog_id_button_label.grid_remove()
         
         self.set_up_spreadsheet()
         self.clipboard_content = ''
         
     
-    #Changes to Millennium settings.
-    def change_to_millennium(self):
-        self.catalog_id_button_text.set('Millennium')
-        self.catalog_id_text.set('Bib number:\t')
-        self.record_source = 'millennium'
-    #Changes to Worldcat settings.
-    def change_to_worldcat(self):
-        self.catalog_id_button_text.set('Worldcat')
-        self.catalog_id_text.set('OCLC number:\t')
-        self.record_source = 'worldcat'
+    #Changes record source.
+    def change_record_source(self, record_source):
+        self.catalog_id_button_text.set(record_source_dict[record_source]['button'])
+        self.catalog_id_text.set(record_source_dict[record_source]['label'])
+        self.record_source = record_source
+    #Changes collection and fills entries in input spreadsheet.
+    def change_collection(self, collection):
+        for row in self.spreadsheet:
+            self.spreadsheet[row]['collection'][0].set(collection)
+
+#    #Changes to Millennium settings.
+#    def change_to_millennium(self):
+#        self.catalog_id_button_text.set('Millennium')
+#        self.catalog_id_text.set('Bib number:\t')
+#        self.record_source = 'millennium'
+#    #Changes to Worldcat settings.
+#    def change_to_worldcat(self):
+#        self.catalog_id_button_text.set('Worldcat')
+#        self.catalog_id_text.set('OCLC number:\t')
+#        self.record_source = 'worldcat'
     #Sets settings
     def set_settings(self):
         settings = setting_dialog(self)
+#    #
+#    def run(self, import_type):
+#        self.screen_text.set('')
+#        self.input_values = []
+#        if import_type == 'single':
+#            self.input_values.append([self.entry_catalog_id_text.get(), self.entry_uuid_text.get()])
+#        elif import_type == 'batch':
+#            for row in self.spreadsheet:
+##                if self.spreadsheet[row]['cat_id'][0].get() is not None and self.spreadsheet[row]['cat_id'][0].get() != '' and self.spreadsheet[row]['ddsnext_uuid'][0].get() is not None and self.spreadsheet[row]['ddsnext_uuid'][0].get() != '' and self.spreadsheet[row]['collection'][0].get() is not None and self.spreadsheet[row]['collection'][0].get() != '':
+#                if self.spreadsheet[row]['cat_id'][0].get() is not None and self.spreadsheet[row]['cat_id'][0].get() != '' and self.spreadsheet[row]['ddsnext_uuid'][0].get() is not None and self.spreadsheet[row]['ddsnext_uuid'][0].get() != '':
+#                    self.input_values.append([self.spreadsheet[row]['cat_id'][0].get(), self.spreadsheet[row]['ddsnext_uuid'][0].get(), self.spreadsheet[row]['collection'][0].get()])
+##        self.records = process_records(self.record_source, self.file_types, self.input_values)
+#        self.process_records()
+#        self.pages = {}
+#        page_num = 0
+#        if self.records != {}:
+#            for key in list(self.records):
+#                page_num += 1
+#                self.pages[page_num] = key
+#            self.screen_text.set(self.records[self.pages[1]])
+#            self.entry_page_text.set(1)
+#            self.number_of_pages.set(page_num)
+#            self.current_record = [1, self.pages[1]]
+#            self.windows.select(1)
+#            self.spreadsheet_clear_button['state'] = 'normal'
+#            self.file_menu.entryconfig('Export', state= 'normal')
+#            self.update()
+#            self.screen_frame_outer.event_generate('<<change_page>>', when='tail')
+    
+    def remove_returns(self, text):
+        while re.match('(.+)(?:\r)(.*$)', text):
+            text = re.match('(.+)(?:\r)(.*$)', text).group(1) + re.match('(.+)(?:\r)(.*$)', text).group(2)
+        return text
+    
     #
-    def run(self, import_type):
+    def run(self):
         self.screen_text.set('')
         self.input_values = []
-        if import_type == 'single':
-            self.input_values.append([self.entry_catalog_id_text.get(), self.entry_uuid_text.get()])
-        elif import_type == 'batch':
-            for row in self.spreadsheet:
-                if self.spreadsheet[row]['cat_id'][0].get() is not None and self.spreadsheet[row]['cat_id'][0].get() != '' and self.spreadsheet[row]['ddsnext_uuid'][0].get() is not None and self.spreadsheet[row]['ddsnext_uuid'][0].get() != '':
-                    self.input_values.append([self.spreadsheet[row]['cat_id'][0].get(), self.spreadsheet[row]['ddsnext_uuid'][0].get()])
-#        self.records = process_records(self.record_source, self.file_types, self.input_values)
+        for row in self.spreadsheet:
+            if self.spreadsheet[row]['cat_id'][0].get() is not None and self.spreadsheet[row]['cat_id'][0].get() != '' and self.spreadsheet[row]['ddsnext_uuid'][0].get() is not None and self.spreadsheet[row]['ddsnext_uuid'][0].get() != '':
+                self.input_values.append([self.remove_returns(self.spreadsheet[row]['cat_id'][0].get()), self.remove_returns(self.spreadsheet[row]['ddsnext_uuid'][0].get()), self.remove_returns(self.spreadsheet[row]['collection'][0].get())])
         self.process_records()
         self.pages = {}
         page_num = 0
@@ -1743,13 +1935,27 @@ class Application(tkinter.Frame):
                 self.pages[page_num] = key
             self.screen_text.set(self.records[self.pages[1]])
             self.entry_page_text.set(1)
-            self.numner_of_pages.set(page_num)
+            self.number_of_pages.set(page_num)
             self.current_record = [1, self.pages[1]]
             self.windows.select(1)
             self.spreadsheet_clear_button['state'] = 'normal'
             self.file_menu.entryconfig('Export', state= 'normal')
             self.update()
-            self.screen_frame_outer.event_generate('<<event1>>', when='tail')
+            self.screen_frame_outer.event_generate('<<change_page>>', when='tail')
+    
+    def change_record_page_navigation(self, change=0, last=False, first=False):
+        if first:
+            self.entry_page_text.set(1)
+            self.change_record_page()
+        elif last:
+           self.entry_page_text.set(self.number_of_pages.get())
+           self.change_record_page()
+        else:
+            page_num = int(self.entry_page_text.get()) + change
+            if page_num > 0 and page_num <= int(self.number_of_pages.get()):
+                self.entry_page_text.set(page_num)
+                self.change_record_page()
+    
     #Change record by page.
     def change_record_page(self):
         self.screen_text.set('')
@@ -1761,12 +1967,12 @@ class Application(tkinter.Frame):
             else:
                 self.entry_page_text.set(self.current_record[0])
             self.update()
-            self.screen_frame_outer.event_generate('<<event1>>', when='tail')
+            self.screen_frame_outer.event_generate('<<change_page>>', when='tail')
     #Returns true if all spreadsheet entries are empty.  Returns false otherwise.
     def check_entries_empty(self):
         verify_empty = True
         for row in self.spreadsheet:
-            if self.spreadsheet[row]['cat_id'][0].get() != '' or self.spreadsheet[row]['ddsnext_uuid'][0].get() != '':
+            if self.spreadsheet[row]['cat_id'][0].get() != '' or self.spreadsheet[row]['ddsnext_uuid'][0].get() != '' or self.spreadsheet[row]['collection'][0].get() != '':
                 verify_empty = False
                 break
         return verify_empty
@@ -1781,6 +1987,12 @@ class Application(tkinter.Frame):
         self.attempt = 1
         event.widget.unbind('<<retry_get_clear_state>>')
         self.get_clear_state()
+    
+#    def manage_catalog_id_popup(self, event, label, type):
+#        if type == 'enter':
+#            label.grid()
+#        if type == 'leave':
+#            label.grid_remove()
     
     #Event handler that determines if the clear button should be disabled or enabled.
     def check_entries_empty_handler(self, event):
@@ -1816,7 +2028,7 @@ class Application(tkinter.Frame):
             self.records = {}
             self.pages = {}
             self.entry_page_text.set(0)
-            self.numner_of_pages.set(0)
+            self.number_of_pages.set(0)
             self.screen_scrollbar_vertical.grid_forget()
             self.screen_scrollbar_horizontal.grid_forget()
             self.scrollbar_visible = False
@@ -1825,16 +2037,52 @@ class Application(tkinter.Frame):
             for row in self.spreadsheet:
                 self.spreadsheet[row]['cat_id'][0].set('')
                 self.spreadsheet[row]['ddsnext_uuid'][0].set('')
+                self.spreadsheet[row]['collection'][0].set('')
         #Disables the check button.
         self.spreadsheet_clear_button['state'] = 'disabled'
         self.file_menu.entryconfig('Export', state= 'disabled')
+    
+    #Clears template spreadsheet.
+    def clear_template(self, template_name):
+#        self.template_dict[template_name]
+        for row in self.template_spreadsheet[template_name]:
+            for item in self.template_spreadsheet[template_name][row]:
+#                print(self.template_spreadsheet[template_name][row][item])
+                if type(self.template_spreadsheet[template_name][row][item]) is tkinter.Entry:
+                    self.set_entry(self.template_spreadsheet[template_name][row][item])
+        #Disables the clear button.
+#        self.spreadsheet_clear_button['state'] = 'disabled'
+    
+    def set_entry(self, given_entry, text=''):
+        disable = False
+        if given_entry['state'] == 'disabled':
+            given_entry['state'] = 'normal'
+            disable = True
+        given_entry.delete(0, tkinter.END)
+        given_entry.insert(0, text)
+        if disable:
+            given_entry['state'] = 'disabled'
     
     #Sets up the screen and spreadsheet canvas for scrolling.
     def set_up_canvas(self, event):
         width = event.width - 1
         self.screen_canvas.configure(scrollregion=self.screen_canvas.bbox('all'))
-        self.spreadsheet_screen_canvas.itemconfigure('self.spreadsheet_frame_inner', width=width)
+#        self.spreadsheet_screen_canvas.itemconfigure('self.spreadsheet_frame_inner', width=width)
         self.spreadsheet_screen_canvas.configure(scrollregion=self.spreadsheet_screen_canvas.bbox('all'))
+    
+    #Sets up the template canvases for scrolling.
+    def set_up_template_canvas(self, event):
+#        width = event.width - 1
+#        print(self.winfo_width())
+#        print(width)
+        for template_name in self.template_dict:
+#            print(template_name, width, self.winfo_width() - 15, self.winfo_width(), self.template_dict[template_name]['template_spreadsheet_frame'].winfo_width())
+#            if self.template_dict[template_name]['defaut'] is None:
+#                self.template_dict[template_name]['defaut'] = self.template_dict[template_name]['template_spreadsheet_frame'].winfo_width()
+#            print(template_name, width, self.template_dict[template_name]['defaut'], self.template_dict[template_name]['defaut'] + width)
+#            self.template_dict[template_name]['template_screen_canvas'].itemconfigure(template_name, width=self.template_dict[template_name]['defaut'] + width)
+#            self.template_dict[template_name]['template_screen_canvas'].itemconfigure(template_name, width=self.template_dict[template_name]['template_spreadsheet_frame'].winfo_width() + (width - 619))
+            self.template_dict[template_name]['template_screen_canvas'].configure(scrollregion=self.template_dict[template_name]['template_screen_canvas'].bbox('all'))
     
     #Sets up the screen canvas for scrolling.
     def set_up_records(self, event):
@@ -1849,46 +2097,342 @@ class Application(tkinter.Frame):
     #Sets up the spreadsheet.
     def set_up_spreadsheet(self):
         for row in range(1, 1000):
-            self.spreadsheet[row] = {'cat_id' : [tkinter.StringVar(), None], 'ddsnext_uuid' : [tkinter.StringVar(), None]}
-            self.spreadsheet[row]['cat_id'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['cat_id'][0])
-            self.spreadsheet[row]['ddsnext_uuid'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['ddsnext_uuid'][0])
+            self.spreadsheet[row] = {'cat_id' : [tkinter.StringVar(), None], 'ddsnext_uuid' : [tkinter.StringVar(), None], 'collection' : [tkinter.StringVar(), None]}
+            self.spreadsheet[row]['cat_id'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['cat_id'][0], font=font.Font(size=self.size))
+            self.spreadsheet[row]['ddsnext_uuid'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['ddsnext_uuid'][0], font=font.Font(size=self.size))
+            self.spreadsheet[row]['collection'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['collection'][0], font=font.Font(size=self.size))
+#            self.spreadsheet[row]['collection'][1] = tkinter.Label(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['collection'][0], font=font.Font(size=self.size))
             self.spreadsheet[row]['cat_id'][1].grid(row=row, column=0, columnspan=4, sticky='nswe')
             self.spreadsheet[row]['ddsnext_uuid'][1].grid(row=row, column=4, columnspan=4, sticky='nswe')
+            self.spreadsheet[row]['collection'][1].grid(row=row, column=8, columnspan=4, sticky='nswe')
+            self.spreadsheet_frame_inner.grid_rowconfigure(row, weight=1, minsize=25)
+            
             self.spreadsheet[row]['cat_id'][1].bind('<FocusIn>', self.enter)
             self.spreadsheet[row]['ddsnext_uuid'][1].bind('<FocusIn>', self.enter)
+            self.spreadsheet[row]['collection'][1].bind('<FocusIn>', self.enter)
             self.spreadsheet[row]['cat_id'][1].bind('<FocusOut>', self.get_clear_state_handler)
             self.spreadsheet[row]['ddsnext_uuid'][1].bind('<FocusOut>', self.get_clear_state_handler)
+            self.spreadsheet[row]['collection'][1].bind('<FocusOut>', self.get_clear_state_handler)
+        self.spreadsheet_frame_inner.grid_columnconfigure(0, weight=1, minsize=330)
+        self.spreadsheet_frame_inner.grid_columnconfigure(4, weight=1, minsize=330)
+        self.spreadsheet_frame_inner.grid_columnconfigure(8, weight=1, minsize=330)
     
-    #Sets up the spreadsheet.
+    #Sets up the spreadsheet for given template.
     def set_up_template(self, template_name, data):
+        #Creates template window and frame if not the window dictionary.
         if not template_name in self.windows_id_dict:
-            self.template_frame = tkinter.Frame(self)
-            self.template_spreadsheet_frame = tkinter.Frame(self.template_frame)
-            self.template_spreadsheet_frame.grid_rowconfigure(0, weight=1)
+            #Creates the template frame.
+            template_frame = tkinter.Frame(self.windows)
+            template_frame.grid(row = 0, column = 0, sticky='nswe')
+            template_frame.grid_columnconfigure(0, weight = 1)
+            template_frame.grid_rowconfigure(0, weight = 1)
+            template_frame.bind('<Configure>', self.set_up_template_canvas)
+            template_frame.bind('<<add_row>>', self.set_up_template_canvas)
+            
+            
+            #Creates the frame containing the spreadsheet canvas.
+            template_spreadsheet_frame_outer = tkinter.Frame(template_frame)
+            template_spreadsheet_frame_outer.grid_rowconfigure(0, weight = 1)
+            template_spreadsheet_frame_outer.grid_columnconfigure(0, weight = 1)
+            template_spreadsheet_frame_outer.grid(row = 0, column = 0, sticky='nswe')
+            
+            
+            #Creates the bottom frame of the template frame.
+            template_bottom_frame = tkinter.Frame(template_frame)
+            template_bottom_frame.grid(row = 2, column = 0)
+            
+            #Creates the (outer) canvas for the spreadsheet frame.
+            template_screen_canvas = tkinter.Canvas(template_spreadsheet_frame_outer, highlightthickness = 0)
+            template_screen_canvas.grid(row = 0, column = 0, sticky='nswe')
+            
+            #Creates the spreadsheet frame of the template frame.
+            template_spreadsheet_frame_shell = tkinter.Frame(template_screen_canvas)
+            template_spreadsheet_frame_shell.grid_rowconfigure(1, minsize = 26)
+            
+            #Creates the spreadsheet frame of the template frame.
+            template_spreadsheet_frame = tkinter.Frame(template_spreadsheet_frame_shell)
+            template_spreadsheet_frame.grid(row = 0, column = 0, sticky='nswe')
+            
+            
+            
+            #Sets up the vertical and horizontal scrollbars.
+            spreadsheet_scrollbar_vertical = tkinter.Scrollbar(template_spreadsheet_frame_outer, orient = 'vertical', command = template_screen_canvas.yview)
+            spreadsheet_scrollbar_horizontal = tkinter.Scrollbar(template_spreadsheet_frame_outer, orient = 'horizontal', command = template_screen_canvas.xview)
+            spreadsheet_scrollbar_vertical.grid(row = 0, column = 2, sticky = 'ns')
+            spreadsheet_scrollbar_horizontal.grid(row = 1, column = 0, sticky = 'we')
+            
+            
+            #Finishes setting up the template canvas by connecting the scrollbar.
+            template_screen_canvas.configure(yscrollcommand = spreadsheet_scrollbar_vertical.set, xscrollcommand = spreadsheet_scrollbar_horizontal.set)
+            template_screen_canvas.create_window((0,0), window = template_spreadsheet_frame_shell, anchor='nw', tags = template_name)
+            
+            
+            
+#            self.template_dict[template_name] = {'template_frame' : template_frame, 'template_spreadsheet_frame' : template_spreadsheet_frame, 'template_bottom_frame' : template_bottom_frame, 'template_screen_canvas' : template_screen_canvas, 'defaut' : None}
+#            self.template_dict[template_name] = {'template_frame' : template_frame, 'template_spreadsheet_frame' : template_spreadsheet_frame, 'template_bottom_frame' : template_bottom_frame, 'template_screen_canvas' : template_screen_canvas, 'last_column' : None}
+            
+            #
+            self.template_dict[template_name] = {'template_frame' : template_frame, 'template_spreadsheet_frame' : template_spreadsheet_frame, 'template_bottom_frame' : template_bottom_frame, 'template_screen_canvas' : template_screen_canvas}
             
             self.template_spreadsheet[template_name] = {}
             self.template_spreadsheet[template_name]['header'] = {}
             
-            self.windows.add(self.template_frame, text=template_name)
+            self.windows.add(self.template_dict[template_name]['template_frame'], text=template_name)
             self.windows_id_dict[template_name] = len(self.windows_id_dict)
+#            print(self.template_dict[template_name])
+#            self.template_dict[template_name]['template_spreadsheet_frame'].bind('<Configure>', self.set_up_canvas)
             
+        self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(0, weight=1)
+        
+        row = 0
+        item_row = 0
+        #Creates header row in spreedsheet.
+        column=0
+#        if template_name == 'kbart_metadata':
+#            self.template_spreadsheet[template_name]['header'][column] = tkinter.Label(self.template_dict[template_name]['template_spreadsheet_frame'])
+#            self.template_spreadsheet[template_name]['header'][column].grid(row=0, column=column, sticky='nswe')
+#            column += 1
         for data_item in data['header']:
-            self.template_spreadsheet[template_name]['header'][data_item] = {tkinter.Entry(self.template_spreadsheet_frame, text=self.data_item)}
+#            print(data_item)
+#            if type(data['header'][data_item]) is dict:
+#                print(data_item)
+##                column = 0
+##                if template_name == 'kbart_metadata':
+##                    self.template_spreadsheet[template_name]['header'][column] = tkinter.Label(self.template_dict[template_name]['template_spreadsheet_frame'])
+##                    column += 1
+#                for data_item_item in data['header'][data_item]:
+#                    self.template_spreadsheet[template_name]['header'][data_item_item] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])
+##                    self.template_spreadsheet[template_name]['header'][data_item_item].delete(0, tkinter.END)
+#                    to_print = ''
+#                    if data['header'][data_item][data_item_item] is not None:
+#                        to_print = data['header'][data_item][data_item_item]
+##                    self.template_spreadsheet[template_name]['header'][data_item_item].insert(0, to_print)
+#                    self.set_entry(self.template_spreadsheet[template_name]['header'][data_item_item], text = to_print)
+#                    self.template_spreadsheet[template_name]['header'][data_item_item].grid(row=0, column=column, sticky='nswe')
+#                    self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(column, weight=1, minsize=300)
+#                    self.template_spreadsheet[template_name]['header'][data_item_item]['state'] = 'disabled'
+#                    column += 1
+#                item_row += 1
+#            
+#            else:
+#                self.template_spreadsheet[template_name]['header'][data_item] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])
+#                self.template_spreadsheet[template_name]['header'][data_item].delete(0, tkinter.END)
+#                to_print = ''
+#                if data['header'][data_item] is not None:
+#                    to_print = data['header'][data_item]
+#                self.template_spreadsheet[template_name]['header'][data_item].insert(0, to_print)
+#                self.set_entry(self.template_spreadsheet[template_name]['header'][data_item], text = to_print)
+#                self.template_spreadsheet[template_name]['header'][data_item].grid(row=0, column=column, sticky='nswe')
+#                if template_name == 'descriptive_metadata':
+#                    self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(column, weight=1, minsize=326)
+#                else:
+#                    self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(column, weight=1, minsize=240)
+#                self.template_dict[template_name]['template_spreadsheet_frame'].grid_rowconfigure(row, weight=1, minsize=30)
+#
+#                self.template_spreadsheet[template_name]['header'][data_item]['state'] = 'disabled'
+#                column += 1
+
+            self.template_spreadsheet[template_name]['header'][data_item] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'], font=font.Font(size=self.size))
+#            self.template_spreadsheet[template_name]['header'][data_item].delete(0, tkinter.END)
+            to_print = ''
+            if data['header'][data_item] is not None:
+                to_print = data['header'][data_item]
+#            self.template_spreadsheet[template_name]['header'][data_item].insert(0, to_print)
+            self.set_entry(self.template_spreadsheet[template_name]['header'][data_item], text = to_print)
+            self.template_spreadsheet[template_name]['header'][data_item].grid(row=0, column=column, sticky='nswe')
+            if template_name == 'descriptive_metadata':
+                self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(column, weight=1, minsize=326)
+            else:
+                self.template_dict[template_name]['template_spreadsheet_frame'].grid_columnconfigure(column, weight=1, minsize=240)
+            self.template_dict[template_name]['template_spreadsheet_frame'].grid_rowconfigure(row, weight=1, minsize=25)
+
+            self.template_spreadsheet[template_name]['header'][data_item]['state'] = 'disabled'
+            column += 1
+            
+#        total_columns = column
+#        self.template_dict[template_name]['last_column'] = column
+        row += 1
+#        row = 1
+#        item_row = 1
         for key in data:
             if key != 'header':
+                column = 0
+#                if template_name == 'kbart_metadata':
+#                    if row not in self.template_spreadsheet[template_name]:
+#                        self.template_spreadsheet[template_name][row] = {}
+#                    self.template_spreadsheet[template_name][row][column] = tkinter.Menubutton(self.template_dict[template_name]['template_spreadsheet_frame'], text = 'Collection')
+#                    self.template_spreadsheet[template_name][row][column].grid()
+#                    self.template_spreadsheet[template_name][row][column].menu = tkinter.Menu(self.template_spreadsheet[template_name][row][column], tearoff=0)
+#                    self.template_spreadsheet[template_name][row][column]['menu'] =  self.template_spreadsheet[template_name][row][column].menu
+#                    self.template_spreadsheet[template_name][row][column].menu.add_command(label='monograph', command=partial(self.get_collection_data, template_name, row = row, collection = 'monograph'))
+#                    self.template_spreadsheet[template_name][row][column].menu.add_command(label='newspaper', command=partial(self.get_collection_data, template_name, row = row, collection = 'newspaper'))
+#                    self.template_spreadsheet[template_name][row][column].menu.add_command(label='serial', command=partial(self.get_collection_data, template_name, row = row, collection = 'serial'))
+#                    self.template_spreadsheet[template_name][row][column].grid(row=row, column=column, sticky='we')
+#                    column += 1
+#                for data_item in data[key]:
+#                    if type(data_item) is dict:
+#                        column = 0
+#                        for data_item_item in data_item:
+#                            self.template_spreadsheet[template_name][item_row] = {data_item_item: tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])}
+##                            self.template_spreadsheet[template_name][item_row][data_item_item].delete(0, tkinter.END)
+#                            to_print = ''
+#                            if data_item[data_item_item] is not None:
+#                                to_print = data_item[data_item_item]
+##                            self.template_spreadsheet[template_name][item_row][data_item_item].insert(0, to_print)
+#                            self.set_entry(self.template_spreadsheet[template_name][item_row][data_item_item], text = to_print)
+#                            self.template_spreadsheet[template_name][item_row][data_item_item].grid(row = item_row, column = column, sticky='nswe')
+#                            column += 1
+#                        item_row += 1
+#                    elif type(data[key][data_item]) is dict:
+#                        column = 0
+#                        for data_item_item in data[key][data_item]:
+#                            self.template_spreadsheet[template_name][item_row] = {data_item_item: tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])}
+##                            self.template_spreadsheet[template_name][item_row][data_item_item].delete(0, tkinter.END)
+#                            to_print = ''
+#                            if data[key][data_item][data_item_item] is not None:
+#                                to_print = data[key][data_item][data_item_item]
+##                            self.template_spreadsheet[template_name][item_row][data_item_item].insert(0, to_print)
+#                            self.set_entry(self.template_spreadsheet[template_name][item_row][data_item_item], text = to_print)
+#                            self.template_spreadsheet[template_name][item_row][data_item_item].grid(row = item_row, column = column, sticky='nswe')
+#                            column += 1
+#                        item_row += 1
+#                    else:
+#                        if row not in self.template_spreadsheet[template_name]:
+#                            self.template_spreadsheet[template_name][row] = {}
+#                        self.template_spreadsheet[template_name][row][data_item] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'], textvariable=data[key][data_item])
+##                        self.template_spreadsheet[template_name][row][data_item].delete(0, tkinter.END)
+#                        to_print = ''
+#                        if data[key][data_item] is not None:
+#                            to_print = data[key][data_item]
+##                        self.template_spreadsheet[template_name][row][data_item].insert(0, to_print)
+#                        self.set_entry(self.template_spreadsheet[template_name][row][data_item], text = to_print)
+#                        self.template_spreadsheet[template_name][row][data_item].grid(row = row, column = column, sticky='nswe')
+#                        column += 1
+#                self.template_dict[template_name]['template_spreadsheet_frame'].grid_rowconfigure(row, weight=1, minsize=25)
+#                row += 1
+##                self.template_spreadsheet[template_name]['row'] = row
                 for data_item in data[key]:
-                    self.template_spreadsheet[template_name][key][data_item] = {tkinter.Entry(self.template_spreadsheet_frame, textvariable=self.data_item)}
-#        for row in range(1, 1000):
-#            self.spreadsheet[row] = {'cat_id' : [tkinter.StringVar(), None], 'ddsnext_uuid' : [tkinter.StringVar(), None]}
-#            self.spreadsheet[row]['cat_id'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['cat_id'][0])
-#            self.spreadsheet[row]['ddsnext_uuid'][1] = tkinter.Entry(self.spreadsheet_frame_inner, textvariable=self.spreadsheet[row]['ddsnext_uuid'][0])
-#            self.spreadsheet[row]['cat_id'][1].grid(row=row, column=0, columnspan=4, sticky='nswe')
-#            self.spreadsheet[row]['ddsnext_uuid'][1].grid(row=row, column=4, columnspan=4, sticky='nswe')
-#            self.spreadsheet[row]['cat_id'][1].bind('<FocusIn>', self.enter)
-#            self.spreadsheet[row]['ddsnext_uuid'][1].bind('<FocusIn>', self.enter)
-#            self.spreadsheet[row]['cat_id'][1].bind('<FocusOut>', self.get_clear_state_handler)
-#            self.spreadsheet[row]['ddsnext_uuid'][1].bind('<FocusOut>', self.get_clear_state_handler)
+                    if row not in self.template_spreadsheet[template_name]:
+                        self.template_spreadsheet[template_name][row] = {}
+                    self.template_spreadsheet[template_name][row][data_item] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'], font=font.Font(size=self.size))
+#                   self.template_spreadsheet[template_name][row][data_item].delete(0, tkinter.END)
+                    to_print = ''
+                    if data[key][data_item] is not None:
+                        to_print = data[key][data_item]
+#                    self.template_spreadsheet[template_name][row][data_item].insert(0, to_print)
+                    self.set_entry(self.template_spreadsheet[template_name][row][data_item], text = to_print)
+                    self.template_spreadsheet[template_name][row][data_item].grid(row = row, column = column, sticky='nswe')
+                    column += 1
+                self.template_dict[template_name]['template_spreadsheet_frame'].grid_rowconfigure(row, weight=1, minsize=25)
+                row += 1
+
+
+        last_row = self.get_template_last_row(template_name)
+        if last_row < 24:
+            for current_row in range(last_row, 24):
+                self.add_template_row(template_name, last_row=current_row)
+#        for i in range(total_columns):
+#            temp = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'], text=str(i))
+#            temp.grid(row = row + item_row, column = i)
+        template_run_button = tkinter.Button(self.template_dict[template_name]['template_bottom_frame'], text='Add row', font=font.Font(size=self.size), command=partial(self.add_template_row, template_name))
+#        template_clear_button = tkinter.Button(self.template_dict[template_name]['template_bottom_frame'], text='Clear', state = 'disabled', command=partial(self.clear_template, template_name))
+        template_clear_button = tkinter.Button(self.template_dict[template_name]['template_bottom_frame'], text='Clear', font=font.Font(size=self.size), command=partial(self.clear_template, template_name))
+        
+#        spreadsheet_clear_options_button = tkinter.Menubutton(self.template_dict[template_name]['template_bottom_frame'], text='^', font=font.Font(size=5, weight='bold'), relief=tkinter.RAISED)
+#        spreadsheet_clear_options_button.menu = tkinter.Menu(spreadsheet_clear_options_button, tearoff=0)
+#        
+#        clear_value = tkinter.StringVar()
+#        clear_value.set('all')
+#        spreadsheet_clear_options_button['menu'] =  spreadsheet_clear_options_button.menu
+#        spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries and Records', variable=clear_value, value='all', command = self.get_clear_state)
+#        spreadsheet_clear_options_button.menu.add_radiobutton(label='Entries', variable=clear_value, value='entries', command = self.get_clear_state)
+#        spreadsheet_clear_options_button.menu.add_radiobutton(label='Records', variable=clear_value, value='records', command = self.get_clear_state)
+        
+        #Sets up Button to switch between Millennium and Worldcat.
+#        spreadsheet_catalog_id_button = tkinter.Menubutton(self.template_dict[template_name]['template_bottom_frame'], textvariable=catalog_id_button_text, relief=tkinter.RAISED)
+#        spreadsheet_catalog_id_button.grid()
+#        spreadsheet_catalog_id_button.menu = tkinter.Menu(spreadsheet_catalog_id_button, tearoff=0)
+#        spreadsheet_catalog_id_button['menu'] =  spreadsheet_catalog_id_button.menu
+#        spreadsheet_catalog_id_button.menu.add_command(label='Millennium', command=change_to_millennium)
+#        spreadsheet_catalog_id_button.menu.add_command(label='Worldcat', command=change_to_worldcat)
+        
+#        spreadsheet_frame_main.grid(row=0, column=0, sticky='nswe')
+#        self.template_dict[template_name]['template_bottom_frame'].grid(row=9, column=0)
+#        , sticky='nswe'
+        template_run_button.grid(row=0, column=1)
+        template_clear_button.grid(row=0, column=2)
+#        spreadsheet_clear_options_button.grid(row=0, column=3, sticky='nw')
+#        spreadsheet_catalog_id_button.grid(row=0, column=0, sticky='ns')
+
+    #Sets up the spreadsheet for given template.
+    def add_to_template(self, template_name, data):
+        keys = []
+        for key in self.template_spreadsheet[template_name]:
+            keys = [key] + keys
+        for row in self.template_spreadsheet[template_name]:
+            if type(row) is int and row > last_row:
+                last_row = row
+        return last_row
+    def get_template_last_row(self, template_name):
+        last_row = 0
+        for row in self.template_spreadsheet[template_name]:
+            if type(row) is int and row > last_row:
+                last_row = row
+        return last_row
+    def add_template_row(self, template_name, last_row=None):
+        if last_row is None:
+#            self.template_dict[template_name]
+            last_row = 0
+#            print(self.template_spreadsheet[template_name])
+            for row in self.template_spreadsheet[template_name]:
+                if type(row) is int and row > last_row:
+                    last_row = row
+        last_row += 1
+#        row = self.template_spreadsheet[template_name]
+#        self.template_spreadsheet[template_name]['column']
+
+#        for column in range(self.template_dict[template_name]['last_column']):
+#            if column == 0:
+#                self.template_spreadsheet[template_name][last_row] = {}  
+#            if column == 0 and template_name == 'kbart_metadata':
+#                self.template_spreadsheet[template_name][last_row][column] = tkinter.Menubutton(self.template_dict[template_name]['template_spreadsheet_frame'], text = 'Collection')
+#                self.template_spreadsheet[template_name][last_row][column].grid()
+#                self.template_spreadsheet[template_name][last_row][column].menu = tkinter.Menu(self.template_spreadsheet[template_name][last_row][column], tearoff=0)
+#                self.template_spreadsheet[template_name][last_row][column]['menu'] =  self.template_spreadsheet[template_name][last_row][column].menu
+#                self.template_spreadsheet[template_name][last_row][column].menu.add_command(label='monograph', command=partial(self.get_collection_data, template_name, row = last_row, collection = 'monograph'))
+#                self.template_spreadsheet[template_name][last_row][column].menu.add_command(label='newspaper', command=partial(self.get_collection_data, template_name, row = last_row, collection = 'newspaper'))
+#                self.template_spreadsheet[template_name][last_row][column].menu.add_command(label='serial', command=partial(self.get_collection_data, template_name, row = last_row, collection = 'serial'))
+#                self.template_spreadsheet[template_name][last_row][column].grid(row=last_row, column=column, sticky='we')
+#            else:
+#                self.template_spreadsheet[template_name][last_row][column] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])
+#                self.template_spreadsheet[template_name][last_row][column].grid(row = last_row, column = column, sticky='nswe')
+        
+        column = 0
+        for key in self.template_spreadsheet[template_name]['header']:
+            if column == 0:
+                self.template_spreadsheet[template_name][last_row] = {}  
+            self.template_spreadsheet[template_name][last_row][key] = tkinter.Entry(self.template_dict[template_name]['template_spreadsheet_frame'])
+            self.template_spreadsheet[template_name][last_row][key].grid(row = last_row, column = column, sticky='nswe')
+            column += 1
+        
+        self.template_dict[template_name]['template_spreadsheet_frame'].grid_rowconfigure(last_row, weight=1, minsize=25)
+        
+        self.template_dict[template_name]['template_frame'].event_generate('<<add_row>>', when='tail')
     
+    def get_collection_data(self, template_name, row, collection):
+        if 'coverage_depth' in self.template_spreadsheet[template_name][row]:
+            self.set_entry(self.template_spreadsheet[template_name][row]['coverage_depth'], text=collection_dict[collection]['coverage_depth'])
+        else:
+            self.set_entry(self.template_spreadsheet[template_name][row][14], text=collection_dict[collection]['coverage_depth'])
+        if 'oclc_collection_name' in self.template_spreadsheet[template_name][row]:
+            self.set_entry(self.template_spreadsheet[template_name][row]['oclc_collection_name'], text=collection_dict[collection]['oclc_collection_name'])
+        else:
+            self.set_entry(self.template_spreadsheet[template_name][row][21], text=collection_dict[collection]['oclc_collection_name'])
+        if 'oclc_collection_id' in self.template_spreadsheet[template_name][row]:
+            self.set_entry(self.template_spreadsheet[template_name][row]['oclc_collection_id'], text=collection_dict[collection]['oclc_collection_id'])
+        else:
+            self.set_entry(self.template_spreadsheet[template_name][row][22], text=collection_dict[collection]['oclc_collection_id'])
+        
     #Event handler that changes page if the page entry is the focus.
     def change_record_page_event_handler(self, event):
         if self.entry_page.focus_get():
@@ -1900,16 +2444,28 @@ class Application(tkinter.Frame):
         event.widget.bind('<KeyPress>', self.check_entries_empty_handler)
     #
     def restore_clipboard(self, event):
-        self.clipboard_append(self.clipboard_content)
+#        self.clipboard_append(self.clipboard_content)
+#        event.widget.unbind('<<restore_clipboard>>')
+        
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(self.clipboard_content)
+        win32clipboard.CloseClipboard()
         event.widget.unbind('<<restore_clipboard>>')
     #
     def check_clipboard(self, event):
-        self.clipboard_content = self.clipboard_get()
-        self.clipboard_clear()
+        win32clipboard.OpenClipboard()
+        self.clipboard_content = win32clipboard.GetClipboardData()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.CloseClipboard()
+        
+#        self.clipboard_content = self.clipboard_get()
+#        self.clipboard_clear()
         current_widget = event.widget
         for match in re.finditer('([^\n]+)(|\n|$)', self.clipboard_content, re.MULTILINE):
             match_text = match.group(1)
             tab_match = re.match('([^\t]+)(?:\t)(.+$)', match.group(1), re.MULTILINE)
+            number_of_tabs = 0
             if tab_match:
                 while tab_match:
                     current_widget.delete(0, tkinter.END)
@@ -1917,20 +2473,64 @@ class Application(tkinter.Frame):
                     current_widget = current_widget.tk_focusNext()
                     match_text = tab_match.group(2)
                     tab_match = re.match('([^\t]+)(?:\t)(.+$)', match_text, re.MULTILINE)
+                    number_of_tabs += 1
                 else:
                     current_widget.delete(0, tkinter.END)
                     current_widget.insert(0, match_text)
                     if re.match('(\n|$)' , match.group(2), re.MULTILINE):
-                        current_widget = current_widget.tk_focusNext()
+                        if number_of_tabs == 1:
+                            current_widget = current_widget.tk_focusNext().tk_focusNext()
+                        elif number_of_tabs == 2:
+                            current_widget = current_widget.tk_focusNext()
             else:
                 current_widget.delete(0, tkinter.END)
                 current_widget.insert(0, match_text)
                 if re.match('(\n|$)' , match.group(2)):
-                    current_widget = current_widget.tk_focusNext().tk_focusNext()
+                    current_widget = current_widget.tk_focusNext().tk_focusNext().tk_focusNext()
         self.get_clear_state()
         current_widget.bind('<<restore_clipboard>>', self.restore_clipboard)
         current_widget.event_generate('<<restore_clipboard>>', when='tail')
         current_widget.focus()
+    
+    #Three columns
+#    def check_clipboard(self, event):
+#        win32clipboard.OpenClipboard()
+#        self.clipboard_content = win32clipboard.GetClipboardData()
+#        win32clipboard.EmptyClipboard()
+#        win32clipboard.CloseClipboard()
+#        
+##        self.clipboard_content = self.clipboard_get()
+##        self.clipboard_clear()
+#        current_widget = event.widget
+#        for match in re.finditer('([^\n]+)(|\n|$)', self.clipboard_content, re.MULTILINE):
+#            match_text = match.group(1)
+#            tab_match = re.match('([^\t]+)(?:\t)(.+$)', match.group(1), re.MULTILINE)
+#            number_of_tabs = 0
+#            if tab_match:
+#                while tab_match:
+#                    current_widget.delete(0, tkinter.END)
+#                    current_widget.insert(0, tab_match.group(1))
+#                    current_widget = current_widget.tk_focusNext()
+#                    match_text = tab_match.group(2)
+#                    tab_match = re.match('([^\t]+)(?:\t)(.+$)', match_text, re.MULTILINE)
+#                    number_of_tabs += 1
+#                else:
+#                    current_widget.delete(0, tkinter.END)
+#                    current_widget.insert(0, match_text)
+#                    if re.match('(\n|$)' , match.group(2), re.MULTILINE):
+#                        if number_of_tabs == 1:
+#                            current_widget = current_widget.tk_focusNext().tk_focusNext()
+#                        elif number_of_tabs == 2:
+#                            current_widget = current_widget.tk_focusNext()
+#            else:
+#                current_widget.delete(0, tkinter.END)
+#                current_widget.insert(0, match_text)
+#                if re.match('(\n|$)' , match.group(2)):
+#                    current_widget = current_widget.tk_focusNext().tk_focusNext().tk_focusNext()
+#        self.get_clear_state()
+#        current_widget.bind('<<restore_clipboard>>', self.restore_clipboard)
+#        current_widget.event_generate('<<restore_clipboard>>', when='tail')
+#        current_widget.focus()
     
     def process_records(self):
         self.records = {}
@@ -1938,38 +2538,60 @@ class Application(tkinter.Frame):
         self.descriptive_metadata = {}
         self.kbart_metadata = {}
         self.title_metadata['header'] = {'title_name' : 'Title Name', 'title_uuid' : 'Title UUID', 'title_material_type' : 'Title Material Type', 'title_format' : 'Title Format', 'title_oclc' : 'Title OCLC', 'title_digital_holding_range' : 'Title Digital Holding Range', 'title_resolution' : 'Title Resolution', 'title_color_depth' : 'Title Color Depth', 'title_location_code' : 'Title Location Code', 'title_catalog_link' : 'Title Catalog Link', 'title_external_link' : 'Title External Link'}
-        self.descriptive_metadata['header'] = [{'title_uuid' : 'title_uuid', 'field' : 'field', 'value' : 'value'}]
+#        self.descriptive_metadata['header'] = {'header' : {'title_uuid' : 'title uuid', 'field' : 'field', 'value' : 'value'}}
+        self.descriptive_metadata['header'] = {'title_uuid' : 'title uuid', 'field' : 'field', 'value' : 'value'}
         self.kbart_metadata['header'] = {'publication_title' : 'publication_title', 'print_identifier' : 'print_identifier', 'online_identifier' : 'online_identifier', 'date_first_issue_online' : 'date_first_issue_online', 'num_first_vol_online' : 'num_first_vol_online', 'num_first_issue_online' : 'num_first_issue_online', 'date_last_issue_online' : 'date_last_issue_online', 'num_last_vol_online' : 'num_last_vol_online', 'num_last_issue_online' : 'num_last_issue_online', 'title_url' : 'title_url', 'first_author' : 'first_author', 'title_id' : 'title_id', 'embargo_info' : 'embargo_info', 'coverage_depth' : 'coverage_depth', 'coverage_notes' : 'coverage_notes', 'publisher_name' : 'publisher_name', 'location' : 'location', 'title_notes' : 'title_notes', 'staff_notes' : 'staff_notes', 'vendor_id' : 'vendor_id', 'oclc_collection_name' : 'oclc_collection_name', 'oclc_collection_id' : 'oclc_collection_id', 'oclc_entry_id' : 'oclc_entry_id', 'oclc_linkscheme' : 'oclc_linkscheme', 'oclc_number' : 'oclc_number', 'action' : 'ACTION'}
+        title_items_row = 0
+        descriptive_metadata_row = 0
+        kbart_metadata_row = 0
         for input_value in self.input_values:
             title_items = None
             descriptive_items = None
             kbart_items = None
             if self.record_source == 'worldcat':
-                marc_record, title_items, descriptive_items, kbart_items = process_oclc(input_value[0], input_value[1])
+                if input_value[2] == '':
+                    marc_record, title_items, descriptive_items, kbart_items = process_oclc(input_value[0], input_value[1])
+                else:
+                    marc_record, title_items, descriptive_items, kbart_items = process_oclc(input_value[0], input_value[1], input_value[2])
             else:
-                marc_record, title_items, descriptive_items, kbart_items = process_bib_num(input_value[0], input_value[1])
+                if input_value[2] == '':
+                    marc_record, title_items, descriptive_items, kbart_items = process_bib_num(input_value[0], input_value[1])
+                else:
+                    marc_record, title_items, descriptive_items, kbart_items = process_bib_num(input_value[0], input_value[1], input_value[2])
             self.records[input_value[0]] = marc_record
-#            self.title_metadata['header'] = {'title_name' : 'Title Name', 'title_uuid' : 'Title UUID', 'title_material_type' : 'Title Material Type', 'title_format' : 'Title Format', 'title_oclc' : 'Title OCLC', 'title_digital_holding_range' : 'Title Digital Holding Range', 'title_resolution' : 'Title Resolution', 'title_color_depth' : 'Title Color Depth', 'title_location_code' : 'Title Location Code', 'title_catalog_link' : 'Title Catalog Link', 'title_external_link' : 'Title External Link'}
-            self.title_metadata[input_value[0]] = title_items
-#            self.descriptive_metadata['header'] = [{'title_uuid' : 'title_uuid', 'field' : 'field', 'value' : 'value'}]
-            self.descriptive_metadata[input_value[0]] = descriptive_items
-#            print(self.descriptive_metadata)
-#            self.kbart_metadata['header'] = {'publication_title' : 'publication_title', 'print_identifier' : 'print_identifier', 'online_identifier' : 'online_identifier', 'date_first_issue_online' : 'date_first_issue_online', 'num_first_vol_online' : 'num_first_vol_online', 'num_first_issue_online' : 'num_first_issue_online', 'date_last_issue_online' : 'date_last_issue_online', 'num_last_vol_online' : 'num_last_vol_online', 'num_last_issue_online' : 'num_last_issue_online', 'title_url' : 'title_url', 'first_author' : 'first_author', 'title_id' : 'title_id', 'embargo_info' : 'embargo_info', 'coverage_depth' : 'coverage_depth', 'coverage_notes' : 'coverage_notes', 'publisher_name' : 'publisher_name', 'location' : 'location', 'title_notes' : 'title_notes', 'staff_notes' : 'staff_notes', 'vendor_id' : 'vendor_id', 'oclc_collection_name' : 'oclc_collection_name', 'oclc_collection_id' : 'oclc_collection_id', 'oclc_entry_id' : 'oclc_entry_id', 'oclc_linkscheme' : 'oclc_linkscheme', 'oclc_number' : 'oclc_number', 'action' : 'ACTION'}
-            self.kbart_metadata[input_value[0]] = kbart_items
+#            self.title_metadata[input_value[0]] = title_items
+            self.title_metadata[title_items_row] = title_items
+            title_items_row += 1
+#            self.descriptive_metadata[input_value[0]] = descriptive_items
+            for key in descriptive_items:
+                self.descriptive_metadata[descriptive_metadata_row] = descriptive_items[key]
+                descriptive_metadata_row += 1
+#            self.kbart_metadata[input_value[0]] = kbart_items
+            self.kbart_metadata[kbart_metadata_row] = kbart_items
+            kbart_metadata_row += 1
 #            print(self.kbart_metadata)
-        if not 'title_items' in self.windows_id_dict:
-            self.windows.add(self.screen_frame, text='title_items')
-            self.windows_id_dict['title_items'] = len(self.windows_id_dict)
-        for 
-            
-        if not 'descriptive_metadata' in self.windows_id_dict:
-            self.windows.add(self.screen_frame, text='descriptive_metadata')
-            self.windows_id_dict['descriptive_metadata'] = len(self.windows_id_dict)
-        if not 'kbart_metadata' in self.windows_id_dict:
-            self.windows.add(self.screen_frame, text='kbart_metadata')
-            self.windows_id_dict['kbart_metadata'] = len(self.windows_id_dict)
-        for 
-    
+
+#        if not 'title_items' in self.windows_id_dict:
+##            self.windows.add(self.screen_frame, text='title_items')
+##            self.windows_id_dict['title_items'] = len(self.windows_id_dict)
+#            self.set_up_template('title_metadata', self.title_metadata)
+#        else:
+#            self.add_to_template('title_metadata', self.title_metadata)
+#        if not 'descriptive_metadata' in self.windows_id_dict:
+##            self.windows.add(self.screen_frame, text='descriptive_metadata')
+##            self.windows_id_dict['descriptive_metadata'] = len(self.windows_id_dict)
+##            print(convert_to_dict(self.descriptive_metadata))
+#            self.set_up_template('descriptive_metadata', self.descriptive_metadata)
+#        if not 'kbart_metadata' in self.windows_id_dict:
+##            self.windows.add(self.screen_frame, text='kbart_metadata')
+##            self.windows_id_dict['kbart_metadata'] = len(self.windows_id_dict)
+#            self.set_up_template('kbart_metadata', self.kbart_metadata)
+##        print(self.windows_id_dict)
+##        for 
+##    
+        self.set_up_template('title_metadata', self.title_metadata)
+        self.set_up_template('descriptive_metadata', self.descriptive_metadata)
+        self.set_up_template('kbart_metadata', self.kbart_metadata)
     def export(self):
         export_dialog(self)
     #Terminates process and closes window
@@ -2049,7 +2671,7 @@ def format_author_field(input_field):
             inst = re.search('(^[e]$)', input_field.subfields[sub][0]).group(1)
             temp_subfield = input_field.get_subfields(inst)
             for occurrence in range(len(temp_subfield)):
-                if not re.match('(^author)', temp_subfield[occurrence]):
+                if not re.search('(author)', temp_subfield[occurrence]):
                     fixed = fix_end_char(temp_subfield[occurrence]).lower()
                     if fixed in author_dict:
                         fixed = author_dict[fixed]
@@ -2158,13 +2780,13 @@ def get_oclc_number(record):
     return oclc_num
 
 #Extract marc record for given oclc number from Worldcat.
-def process_oclc(oclc_num, input_uuid):
+def process_oclc(oclc_num, input_uuid, input_collection = None):
     marc_record = next(get_marc_records.get_marc_worldcat(marc_from_oclc(oclc_num)))
-    return process_marc_file(marc_record, None, input_uuid)
+    return process_marc_file(marc_record, None, input_uuid, input_collection)
 
 #Extract marc record for given bib number from  Millennium.
-def process_bib_num(input_bib_num, input_uuid):
-    print(input_bib_num)
+def process_bib_num(input_bib_num, input_uuid, input_collection = None):
+#    print(input_bib_num)
     bib_num = ''
     if len(str(input_bib_num)) == 9:
         bib_num = input_bib_num[:8]
@@ -2181,16 +2803,16 @@ def process_bib_num(input_bib_num, input_uuid):
             marc_record_millennium = a.getText()
             break
     marc_record = next(get_marc_records.get_marc_millennium((marc_record_millennium)))
-    return process_marc_file(marc_record, input_bib_num, input_uuid)
+    return process_marc_file(marc_record, input_bib_num, input_uuid, input_collection)
 
 def remove_ending_comma(text):
     if re.match('(.+)(,\s*$)', text):
         text = re.match('(.+)(,\s*$)', text).group(1)
     return text
 
-def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
+def process_marc_file(marc_record, input_bib_num, input_uuid, input_collection = None, extention='.csv'):
     record = marc_record
-    descriptive_metadata = []
+#    descriptive_metadata = []
     ddsnext_uuid = ''
     issn_isbn = ''
     tid = ''
@@ -2215,11 +2837,22 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
     languages = []
     subjects = []
     publisher = []
+    row = 0
     original_marc = record.as_marc()
     ddsnext_uuid = input_uuid
     title_items = {'title_name' : None, 'title_uuid' : ddsnext_uuid, 'title_material_type' : None, 'title_format' : None, 'title_oclc' : None, 'title_digital_holding_range' : None, 'title_resolution' : None, 'title_color_depth' : None, 'title_location_code' : None, 'title_catalog_link' : catalog_link, 'title_external_link' : None}
-    descriptive_items = []
-    kbart_items = {'publication_title' : None, 'print_identifier' : None, 'online_identifier' : None, 'date_first_issue_online' : None, 'num_first_vol_online' : None, 'num_first_issue_online' : None, 'date_last_issue_online' : None, 'num_last_vol_online' : None, 'num_last_issue_online' : None, 'title_url' : catalog_link, 'first_author' : None, 'title_id' : None, 'embargo_info' : None, 'coverage_depth' : None, 'coverage_notes' : None, 'publisher_name' : None, 'location' : None, 'title_notes' : None, 'staff_notes' : None, 'vendor_id' : None, 'oclc_collection_name' : None, 'oclc_collection_id' : None, 'oclc_entry_id' : bib_num_id, 'oclc_linkscheme' : None, 'oclc_number' : None, 'action' : None}
+    descriptive_items = {}
+    kbart_items = {'publication_title' : None, 'print_identifier' : None, 'online_identifier' : None, 'date_first_issue_online' : None, 'num_first_vol_online' : None, 'num_first_issue_online' : None, 'date_last_issue_online' : None, 'num_last_vol_online' : None, 'num_last_issue_online' : None, 'title_url' : None, 'first_author' : None, 'title_id' : None, 'embargo_info' : None, 'coverage_depth' : None, 'coverage_notes' : None, 'publisher_name' : None, 'location' : None, 'title_notes' : None, 'staff_notes' : None, 'vendor_id' : None, 'oclc_collection_name' : None, 'oclc_collection_id' : None, 'oclc_entry_id' : bib_num_id, 'oclc_linkscheme' : None, 'oclc_number' : None, 'action' : 'raw'}
+    if input_collection is not None:
+        if re.match('(.+)(?:\r)(.*$)', input_collection):
+            print(input_bib_num, input_uuid, input_collection)
+            input_collection = re.match('(.+)(?:\r)(.*$)', input_collection).group(1) + re.match('(.+)(?:\r)(.*$)', input_collection).group(2)
+        kbart_items['coverage_depth'] = collection_dict[input_collection]['coverage_depth']
+        kbart_items['oclc_collection_name'] = collection_dict[input_collection]['oclc_collection_name']
+        kbart_items['oclc_collection_id'] = collection_dict[input_collection]['oclc_collection_id']
+        if re.match('(monograph$)', input_collection.lower()) and record['260'] is not None and record['260']['c'] is not None:
+            if re.search('(\d{4})', record['260']['c']):
+                kbart_items['date_first_issue_online'] = re.search('(\d{4})', record['260']['c']).group(1)
     #Extracts title
     if record['245'] is not None:
         output_title = fix_end_char(fix_245_field(record['245']).value())
@@ -2237,21 +2870,42 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
     if record['246'] is not None:
         if record['246']['i'] is not None and record['246']['a'] is not None and re.search('CRL collection title', record['246']['i']):
 #            dds_descriptive_writer.writerow([ddsnext_uuid, 'series', record['246']['i'] + ' ' + record['246']['a']])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : record['246']['i'] + ' ' + record['246']['a']})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : record['246']['i'] + ' ' + record['246']['a']})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : record['246']['i'] + ' ' + record['246']['a']}
+            row += 1
+    #Extracts holdings and title url.
+    if record['856'] is not None and record['856']['u'] is not None:
+        for f in record.get_fields('856'):
+            for sub in f.get_subfields('u'):
+                if f['z'] is None or f['z'] is not None and not re.search('(?:[Gg][Uu][Ii][Dd][Ee])', f['z']):
+                    if re.search('(?:.*ddsnext\.crl\.edu\/titles\/)(\d+)', sub):
+                        kbart_items['title_url'] = sub
+                        if f['z'] is not None and re.search('(?:.\:\s*)(.+)', f['z']):
+                            holdings = re.search('(?:.\:\s*)(.+)', f['z']).group(1)
+                            title_items['title_digital_holding_range'] = re.search('(?:.\:\s*)(.+)', f['z']).group(1)
+                        elif f['3'] is not None and re.search('(?:.\:\s*)(.+)', f['3']):
+                            holdings = re.search('(?:.\:\s*)(.+)', f['3']).group(1)
+                            title_items['title_digital_holding_range'] = re.search('(?:.\:\s*)(.+)', f['3']).group(1)
     #Extracts and prints LCCN
     if record['010'] is not None:
 #        dds_descriptive_writer.writerow([ddsnext_uuid, 'LCCN', record['010'].value()])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'LCCN', 'value' : record['010'].value()})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'LCCN', 'value' : record['010'].value()})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'LCCN', 'value' : record['010'].value()}
+        row += 1
     #Extracts and prints ISBN
     if record['020'] is not None:
 #        dds_descriptive_writer.writerow([ddsnext_uuid, 'ISBN', record['020'].value()])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'ISBN', 'value' : record['020'].value()})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'ISBN', 'value' : record['020'].value()})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'ISBN', 'value' : record['020'].value()}
         kbart_items['online_identifier'] = record['020']
+        row += 1
     #Extracts and prints ISSN
     if record['022'] is not None and record['022']['a'] is not None:
 #        dds_descriptive_writer.writerow([ddsnext_uuid, 'ISSN', record['022']['a']])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'ISSN', 'value' : record['022']['a']})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'ISSN', 'value' : record['022']['a']})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'ISSN', 'value' : record['022']['a']}
         kbart_items['online_identifier'] = record['022']['a']
+        row += 1
     #Extracts and prints ISSN
     if record['022'] is not None and record['022']['l'] is not None:
         kbart_items['print_identifier'] = record['022']['l']
@@ -2293,7 +2947,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                     description = description + ' '
                 description = description + record['502']['d']
 #        dds_descriptive_writer.writerow([ddsnext_uuid , 'description', description])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description}
+        row += 1
     #Extracts and prints description
     if record['520'] is not None and record['520']['a'] is not None:
         description = record['520']['a']
@@ -2302,7 +2958,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 description = description + ' '
             description = description + record['520']['b']
 #        dds_descriptive_writer.writerow([ddsnext_uuid , 'description', description])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'description', 'value' : description}
+        row += 1
     #Extracts language
     if record['041'] is not None:
         if record['041']['a'] is not None:
@@ -2315,7 +2973,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
         if record['998']['g'] is not None:
             if fix_end_char(record['998']['g']) in country_dict and fix_end_char(record['998']['g']) != 'xx':
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'country', country_dict[fix_end_char(record['998']['g'])]])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(record['998']['g'])]})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(record['998']['g'])]})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(record['998']['g'])]}
+                row += 1
                 country = True
         if record['998']['f'] is not None:
             if record['998']['f'] in language_dict:
@@ -2329,7 +2989,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 country_code = re.search('([a-zA-Z]+)', record['008'].value()[15:18]).group(1)
             if fix_end_char(country_code) in country_dict and fix_end_char(country_code) != 'xx':
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'country', country_dict[fix_end_char(country_code)]])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(country_code)]})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(country_code)]})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'country', 'value' : country_dict[fix_end_char(country_code)]}
+                row += 1
         if record['008'].value()[35:38] in language_dict:
             languages.append(language_dict[record['008'].value()[35:38]])
     #Deduplicate languages
@@ -2338,18 +3000,24 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
     #Prints languages
     for language in languages:
 #        dds_descriptive_writer.writerow([ddsnext_uuid , 'language' , language])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'language', 'value' : language})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'language', 'value' : language})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'language', 'value' : language}
+        row += 1
     #Extracts and prints coverage (country)
     if record['752'] is not None and record['752']['a'] is not None:
 #        dds_descriptive_writer.writerow([ddsnext_uuid , 'coverage' , record['752']['a']])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'coverage', 'value' : record['752']['a']})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'coverage', 'value' : record['752']['a']})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'coverage', 'value' : record['752']['a']}
+        row += 1
     #Extracts and prints call number if record is an electronic Millennium record.
     if record['099'] is not None:
         if record['099']['a'] is not None:
             for sub in record['099'].get_subfields('a'):
                 if sub != 'Internet resource' and sub != 'ediss' and sub != 'MF' and sub != 'Electronic version' and sub != 'Electronic resource/e' and sub != 'TOSS' and not re.search('[Ee][Ll][Ee][Cc]?[Tt][Rr][Oo][Nn][Ii][Cc]', sub):
 #                    dds_descriptive_writer.writerow([ddsnext_uuid, 'resource_identifier', sub])
-                    descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'resource_identifier', 'value' : sub})
+#                    descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'resource_identifier', 'value' : sub})
+                    descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'resource_identifier', 'value' : sub}
+                    row += 1
     #Extracts and prints creator
     #Extracts subject (title)
     if record['100'] is not None:
@@ -2361,7 +3029,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
 #            if re.match('(.+)(,\s*$)', author):
 #                author = re.match('(.+)(,\s*$)', author).group(1)
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
             kbart_items['first_author'] = remove_ending_comma(record['100']['a'])
     #Extracts and prints creator
     #Extracts subject (title)
@@ -2372,7 +3042,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 f.delete_subfield('t')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints creator
     #Extracts subject (title)
     if record['111'] is not None:
@@ -2382,7 +3054,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 f.delete_subfield('t')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints creator
     #Extracts subject (title)
     if record['700'] is not None:
@@ -2394,7 +3068,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
 #            if re.match('(.+)(,\s*$)', author):
 #                author = re.match('(.+)(,\s*$)', author).group(1)
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints creator
     #Extracts subject (title)
     if record['710'] is not None:
@@ -2404,7 +3080,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 f.delete_subfield('t')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints creator
     #Extracts subject (title)
     if record['711'] is not None:
@@ -2414,7 +3092,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                 f.delete_subfield('t')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts publishers
     if record['260'] is not None:
         for f in record.get_fields('260'):
@@ -2435,7 +3115,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
     #Prints publishers
     for pub in publisher:
 #        dds_descriptive_writer.writerow([ddsnext_uuid , 'publisher' , pub])
-        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'publisher', 'value' : pub})
+#        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'publisher', 'value' : pub})
+        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'publisher', 'value' : pub}
+        row += 1
         if kbart_items['publisher_name'] is None:
             kbart_items['publisher_name'] = pub
     #Extracts and prints series
@@ -2445,7 +3127,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
             f = remove_subfield(f, '6')
             if f['t'] is not None:
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'series' , f['a']])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']}
+                row += 1
                 f.delete_subfield('t')
             if f['v'] is not None:
                 f.delete_subfield('v')
@@ -2453,7 +3137,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
 #            if re.match('(.+)(,\s*$)', author):
 #                author = re.match('(.+)(,\s*$)', author).group(1)
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints series
     #Extracts and prints author
     if record['810'] is not None:
@@ -2461,13 +3147,17 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
             f = remove_subfield(f, '6')
             if f['t'] is not None:
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'series' , f['a']])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']}
+                row += 1
                 f.delete_subfield('t')
             if f['v'] is not None:
                 f.delete_subfield('v')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints series
     #Extracts and prints author
     if record['811'] is not None:
@@ -2475,20 +3165,26 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
             f = remove_subfield(f, '6')
             if f['t'] is not None:
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'series' , f['a']])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']}
+                row += 1
                 f.delete_subfield('t')
             if f['v'] is not None:
                 f.delete_subfield('v')
             author = remove_subfield(format_author_field(f), '6').value()
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'creator' , author])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'creator', 'value' : author}
+            row += 1
     #Extracts and prints series
     if record['830'] is not None:
         for f in record.get_fields('830'):
             f = remove_subfield(f, '6')
             if f['a'] is not None:
 #                dds_descriptive_writer.writerow([ddsnext_uuid , 'series' , f['a']])
-                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+#                descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']})
+                descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'series', 'value' : f['a']}
+                row += 1
     #Extracts and prints subject (author)
     #Extracts and prints subject (title)
     if record['600'] is not None:
@@ -2569,12 +3265,16 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
                         if re.match('(.+)(,\s*$)', orig_author):
                             orig_author = re.match('(.+)(,\s*$)', orig_author).group(1)
 #                        dds_descriptive_writer.writerow([ddsnext_uuid , 'orig_author' , orig_author])
-                        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'orig_author', 'value' : orig_author})
+#                        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'orig_author', 'value' : orig_author})
+                        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'orig_author', 'value' : orig_author}
+                        row += 1
                     #Extracts and prints original title
                     if re.search('(^245-)', sub):
                         orig_title = fix_end_char(fix_245_field(f).value())
 #                        dds_descriptive_writer.writerow([ddsnext_uuid , 'orig_title' , orig_title])
-                        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'orig_title', 'value' : orig_title})
+#                        descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'orig_title', 'value' : orig_title})
+                        descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'orig_title', 'value' : orig_title}
+                        row += 1
     for n in range(len(subjects)):
         subjects[n] = fix_end_char(subjects[n])
     #Deduplicate subjects
@@ -2584,7 +3284,9 @@ def process_marc_file(marc_record, input_bib_num, input_uuid, extention='.csv'):
     for s in subjects:
         if not ((material_type == '2' or (material_type == '5' and (location == 'fdocs' or location == 'fogse'))) and fix_end_char(s) == 'Periodicals') and not (material_type == '3' and fix_end_char(s) == 'Newspapers'):
 #            dds_descriptive_writer.writerow([ddsnext_uuid , 'subject' , fix_end_char(s)])
-            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'subject', 'value' : fix_end_char(s)})
+#            descriptive_items.append({'title_uuid' : ddsnext_uuid, 'field' : 'subject', 'value' : fix_end_char(s)})
+            descriptive_items[row] = {'title_uuid' : ddsnext_uuid, 'field' : 'subject', 'value' : fix_end_char(s)}
+            row += 1
     return [marc_record, title_items, descriptive_items, kbart_items]
 
 #def process_records(record_source, file_types, input_values):
