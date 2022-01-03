@@ -29,7 +29,8 @@ from crl.fetch_from_api import marc_from_oclc, marc_from_issn, marc_from_lccn
 #import utilties.get_marc_records as get_marc_records
 #from . import get_marc_records
 #from utilties import get_marc_records
-sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Desktop\\Python files\\metadata_extraction\\utilties'))
+#sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Desktop\\Python files\\metadata_extraction\\utilties'))
+sys.path.append(os.path.abspath('C:\\Users\\tmoss\\Documents\\GitHub\\metadata_extraction\\utilties'))
 import get_marc_records
 from functools import partial
 import configparser
