@@ -1,0 +1,6 @@
+pymarc
+bs4
+urllib3
+openpyxl
+pywin32
+tifffile
