@@ -23,8 +23,8 @@ class configuration:
         if not os.path.isfile(os.path.join(self.config_folder, 'okapi_manager.ini')):
             self.initial_config()
             self.add_section('data')
-            self.config['data']['okapi_url'] = ''
-            self.config['data']['tenant'] = ''
+            self.config['data']['okapi_url'] = 'https://okapi-crl.folio.ebsco.com'
+            self.config['data']['tenant'] = 'fs00001092'
             self.config['data']['username'] = ''
             self.config['data']['password'] = ''
             self.config['data']['okapi_token'] = ''
