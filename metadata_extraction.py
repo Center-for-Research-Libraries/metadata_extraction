@@ -145,9 +145,7 @@ class api_configuration:
         if not os.path.isfile(self.config_folder):
             self.initial_config()
             self.add_section('API KEYS')
-#            self.config['API KEYS'] = {'tremayne' : 'dJWOW13v3Dto56AkOoQr6iyrQcLiTYt8kMV0vVAMGNo4LCjj67QmEu34sgMHKJVZ59oz7h3CmTooSAyd', 'chad' : 'OFMCzlRWkYW1JeJoSUCHRWPHsAbNKzbYcXjVnt9M5OYkPIdAkSwkEQVSUQuMUqOsmXUV4rMmnkDcxFBS'}
             self.add_section('Preferred API Key')
-#            self.config['Preferred API Key'] = {'preferred' : 'chad'}
             self.write_config_file()
         else:
             self.initial_config()
