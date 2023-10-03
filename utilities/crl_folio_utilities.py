@@ -290,7 +290,7 @@ def format_008(data):
 
 #Gets marc record from API.
 #Converts record from json to marc then returns record.
-def get_marc(uuid = None):
+def get_marc(uuid = None, return_type = 'pymarc'):
     if uuid is None:
         uuid = get_uuid_from_user()
     headers = {'Accept' : 'application/json', 'X-Okapi-Tenant' : config.config['data']['tenant'], 'x-okapi-token' : config.config['data']['okapi_token']}
@@ -317,7 +317,14 @@ def get_marc(uuid = None):
                 subfields.append(match.group(1))
                 subfields.append(match.group(2))
             record.add_field(pymarc.Field(row['tag'], row['indicators'], subfields))
-    return record
+    if return_type == 'xml':
+        xml_record = pymarc.marcxml.record_to_xml(record)
+        return xml_record
+    elif return_type == 'json':
+        return record.as_json()
+    else:
+        return record
+
 
 #Returns all the instance records.
 def get_instance_records_all(start = 0, end = None, limit = 100000, return_type = 'json'):
